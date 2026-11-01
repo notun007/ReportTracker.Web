@@ -1,60 +1,31 @@
-# ReportTrackerWeb
-
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.2.5.
-
-## Development server
-
-To start a local development server, run:
-
-```bash
-ng serve
-```
-
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
-
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
-
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
 # ReportTracker.Web
+
+Angular 22 client for the sibling `ReportTracker` API project.
+
+## Run
+
+Use Node 22.22.3+, 24.15.0+, or a newer supported release.
+
+```powershell
+npm ci
+npm start
+```
+
+Start the API on `http://localhost:5092`, then open `http://localhost:4200`. `proxy.conf.json` forwards `/api` to that API.
+
+The first visit creates the initial workspace account. Afterward, sign in with a local account. The session cookie is HttpOnly; Angular supplies the CSRF header for same-origin updates. Passwords and bearer tokens are never stored in browser local storage. API failures produce visible errors rather than demo rows.
+
+Report Coordinators can create report definitions and explicit reporting cycles. Administrators manage divisions and user accounts. Assigned officers record full or partial sending and inspect persisted history. Deadlines and actual sending times are entered in Asia/Dhaka and converted to UTC before saving.
+
+The API retains an optional JWT bearer scheme for future bank SSO. Browser SSO integration requires the bank's provider metadata; it is not active yet.
+
+## Verify
+
+```powershell
+npm run build
+node node_modules/typescript/bin/tsc -p tsconfig.app.json --noEmit
+```
+
+Production hosting should serve the client and `/api` through one HTTPS origin. The development proxy is not part of the production bundle.
+
+See the API project's `BB_Reporting_Tracker_Plan.md` and README for the requirements baseline and remaining workflows.

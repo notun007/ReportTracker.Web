@@ -1,29 +1,45 @@
-import { HttpClient } from '@angular/common/http';
-import { Injectable, inject } from '@angular/core';
-import { Observable, catchError, of } from 'rxjs';
-import { DashboardSummary } from './dashboard.models';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { Injectable, inject, signal } from '@angular/core';
+import { catchError, switchMap, tap, throwError } from 'rxjs';
+import { DashboardSummary, SendingRecord, SendingHistory, SessionResponse, SessionUser, Lookups, ReportDefinition, UserItem } from './dashboard.models';
 
+export function apiError(error: unknown): string {
+  if (error instanceof HttpErrorResponse) {
+    if ([0, 502, 503, 504].includes(error.status)) return 'The API is unavailable. Start the ReportTracker API and retry the connection.';
+    if (error.status === 401) return error.error?.title ?? 'Your session has expired. Please sign in again.';
+    if (error.status === 403) return error.error?.detail ?? 'You do not have permission for this action.';
+    if (error.error?.errors) return Object.values(error.error.errors).flat().join(' ');
+    return error.error?.detail ?? error.error?.title ?? 'The request failed. Please try again.';
+  }
+  return 'The request failed. Please try again.';
+}
+@Injectable({ providedIn: 'root' })
+export class SessionService {
+  private readonly http = inject(HttpClient);
+  readonly user = signal<SessionUser | null>(null);
+  readonly setupRequired = signal(false);
+  readonly available = signal(false);
+  load() { return this.http.get<SessionResponse>('/api/auth/session').pipe(
+    tap(data => { this.user.set(data.user); this.setupRequired.set(data.setupRequired); this.available.set(true); }),
+    catchError(error => { this.available.set(false); return throwError(() => error); })
+  ); }
+  login(body: unknown) { return this.http.post('/api/auth/login', body).pipe(switchMap(() => this.load())); }
+  setup(body: unknown) { return this.http.post('/api/auth/setup', body).pipe(switchMap(() => this.load())); }
+  logout() { return this.http.post('/api/auth/logout', {}).pipe(switchMap(() => this.load())); }
+}
 @Injectable({ providedIn: 'root' })
 export class DashboardService {
   private readonly http = inject(HttpClient);
-  getDashboard(): Observable<DashboardSummary> {
-    return this.http.get<DashboardSummary>('/api/dashboard').pipe(catchError(() => of(DEMO_DASHBOARD)));
-  }
+  getDashboard() { return this.http.get<DashboardSummary>('/api/dashboard'); }
+  recordSending(id: string, body: SendingRecord) { return this.http.post<void>(`/api/obligations/${id}/sending-events`, body); }
+  history(id: string) { return this.http.get<SendingHistory[]>(`/api/obligations/${id}/history`); }
+  lookups() { return this.http.get<Lookups>('/api/setup/lookups'); }
+  reports() { return this.http.get<ReportDefinition[]>('/api/setup/reports'); }
+  createReport(body: unknown) { return this.http.post('/api/setup/reports', body); }
+  createCycle(id: string, body: unknown) { return this.http.post(`/api/setup/reports/${id}/cycles`, body); }
+  users() { return this.http.get<UserItem[]>('/api/setup/users'); }
+  createUser(body: unknown) { return this.http.post('/api/setup/users', body); }
+  createDivision(body: unknown) { return this.http.post('/api/setup/divisions', body); }
 }
-const DEMO_DASHBOARD: DashboardSummary = {
-  myPending: 7, dueToday: 3, overdue: 5, evidencePending: 4,
-  performance: [{ status: 'Not Sent', count: 8 }, { status: 'Partially Sent', count: 5 }, { status: 'Sent', count: 14 }],
-  upcoming: [
-    row('RIT', 'RIT submission to BB', 'BB', 'Asadur Rahman', '2026-11-12T11:00:00Z', 'Upcoming', 'Partially Sent', 'Not Required', 'Missing'),
-    row('RIT', 'Internet Banking Data', 'Internal', 'Nusrat Jahan', '2026-11-08T09:00:00Z', 'Due Today', 'Sent', 'Receipt Confirmed', 'Provided'),
-    row('RIT', 'CBS Data', 'Internal', 'Tanvir Ahmed', '2026-11-09T09:00:00Z', 'Due Today', 'Sent', 'Awaiting Confirmation', 'Provided'),
-    row('RIT', 'Card Data', 'Internal', 'Asadur Rahman', '2026-11-10T09:00:00Z', 'Overdue', 'Not Sent', 'Awaiting Confirmation', 'Missing'),
-    row('Large Value Credit Report', 'BB submission', 'BB', 'Farhana Akter', '2026-11-07T11:00:00Z', 'Overdue', 'Not Sent', 'Not Required', 'Missing'),
-    row('Off-site ATM Report', 'ATM Data handover', 'Internal', 'Mahmudul Hasan', '2026-11-16T09:00:00Z', 'Upcoming', 'Sent', 'Receipt Confirmed', 'Verified'),
-    row('RIT', 'Card correction submission', 'Correction', 'Asadur Rahman', '2026-11-15T11:00:00Z', 'Upcoming', 'Not Sent', 'Not Required', 'Missing'),
-  ],
-};
-function row(report: string, obligation: string, type: 'Internal' | 'BB' | 'Correction', owner: string, dueAtUtc: string,
-  timeliness: string, sendingStatus: string, receiptStatus: string, evidenceStatus: string) {
-  return { id: crypto.randomUUID(), report, period: 'October 2026', obligation, type, owner, dueAtUtc, timeliness, sendingStatus, receiptStatus, evidenceStatus };
-}
+
+

@@ -1,41 +1,81 @@
+@if (!ready()) { <p class="loading">Connecting to your workspace…</p> }
+@else if (!session.available()) {
+  <main class="auth-page"><section class="auth-card" aria-labelledby="connection-title">
+    <h1 id="connection-title">Cannot connect to ReportTracker</h1>
+    <p>Connect to the API before creating your workspace or signing in.</p>
+    <div class="error-banner" role="alert">{{ error() }}</div>
+    <button class="primary" type="button" (click)="loadSession()">Retry connection</button>
+  </section></main>
+} @else if (!session.user()) {
+  @if (error()) { <div class="error-banner" role="alert">{{ error() }} <button type="button" (click)="loadSession()">Retry connection</button></div> }
+  <app-sign-in (signedIn)="signedIn()" />
+} @else {
 <div class="shell" [class.nav-collapsed]="navCollapsed()">
   <aside class="sidebar">
     <div class="brand"><span class="brand-mark">SB</span><div><strong>Southeast Bank PLC.</strong><small>a bank with vision</small></div></div>
     <div class="product-name">BB Reporting Tracker</div>
-    <nav aria-label="Primary navigation">
-      @for (item of ['Overview','Report Setup','Internal Reporting Tracker','BB Submission Tracker','Corrections','Extensions','Calendar','Monitoring Reports','Administration']; track item; let i = $index) {
-        <button [class.active]="i === 0" type="button"><span class="nav-icon" aria-hidden="true">{{ ['⌂','▤','◷','↗','▧','＋','□','▥','⚙'][i] }}</span><span class="nav-label">{{ item }}</span></button>
-      }
-    </nav>
+    <nav aria-label="Primary navigation">@for (item of navigation(); track item; let i = $index) {
+      <button [class.active]="view() === item" type="button" (click)="navigate(item)" [attr.title]="item"><span class="nav-icon" aria-hidden="true">{{ ['⌂','▤','◷','↗','□','▥','⚙'][i] }}</span><span class="nav-label">{{ item }}</span></button>
+    }</nav>
     <div class="scope-note"><span class="dot"></span><span>Tracking metadata only<br><small>No report data stored</small></span></div>
   </aside>
   <main>
-    <header class="topbar"><div class="topbar-left"><button class="icon-button menu" type="button" (click)="navCollapsed.set(!navCollapsed())" aria-label="Toggle navigation">☰</button><h1>Overview</h1></div><div class="topbar-actions"><label class="search"><span>⌕</span><input [(ngModel)]="search" placeholder="Search reports, periods, owners…" aria-label="Search obligations"></label><button class="icon-button notification" type="button" aria-label="Notifications">♢<b>3</b></button><span class="avatar">AR</span><span class="user-name">Asadur Rahman</span></div></header>
+    <header class="topbar"><div class="topbar-left"><button class="icon-button menu" type="button" (click)="navCollapsed.set(!navCollapsed())" aria-label="Toggle navigation">☰</button><h1>{{ view() }}</h1></div><div class="topbar-actions"><span class="user-name">{{ session.user()?.displayName }}</span><button class="secondary" type="button" (click)="logout()">Sign out</button></div></header>
     <div class="content">
-      <section class="welcome"><div><h2>Good morning, Asadur Rahman</h2><p>Here’s the current status of your reporting obligations.</p></div><time>{{ today }}</time></section>
+      @if (error()) { <div class="error-banner" role="alert">{{ error() }} <button type="button" (click)="reload()">Retry</button></div> }
+      @if (view() === 'Report Setup' || view() === 'Administration') {
+        @if (view() === 'Report Setup') { <app-workspace-setup mode="Report Setup" (changed)="reload()" /> }
+        @else { <app-workspace-setup mode="Administration" (changed)="reload()" /> }
+      } @else {
+      <section class="welcome"><div><h2>{{ view() === 'Overview' ? 'Welcome, ' + session.user()?.displayName : view() }}</h2><p>Live reporting obligations · All deadlines shown in Bangladesh time</p></div><time>{{ today }}</time></section>
+      @if (loading()) { <p role="status">Refreshing obligations…</p> }
       @if (dashboard(); as data) {
+        @if (view() === 'Overview') {
         <section class="metrics" aria-label="Obligation summary">
-          <button type="button" [class.selected]="activeFilter() === 'All'" (click)="setFilter('All')"><span class="metric-icon blue">▤</span><span><b>My pending</b><strong>{{ data.myPending }}</strong><small>Reports assigned to you</small></span></button>
-          <button type="button" [class.selected]="activeFilter() === 'Due Today'" (click)="setFilter('Due Today')"><span class="metric-icon slate">□</span><span><b>Due today</b><strong>{{ data.dueToday }}</strong><small>Internal and BB submissions</small></span></button>
-          <button type="button" [class.selected]="activeFilter() === 'Overdue'" (click)="setFilter('Overdue')"><span class="metric-icon red">!</span><span><b>Overdue</b><strong class="danger-text">{{ data.overdue }}</strong><small>Past effective due date</small></span></button>
-          <button type="button"><span class="metric-icon slate">⌕</span><span><b>Evidence pending</b><strong>{{ data.evidencePending }}</strong><small>Awaiting confirmation proof</small></span></button>
-        </section>
+          <button type="button" (click)="setFilter('My Pending')"><span class="metric-icon blue">▤</span><span><b>My pending</b><strong>{{ data.myPending }}</strong><small>Assigned to you</small></span></button>
+          <button type="button" (click)="setFilter('Due Today')"><span class="metric-icon slate">□</span><span><b>Due today</b><strong>{{ data.dueToday }}</strong><small>Authorized pending obligations</small></span></button>
+          <button type="button" (click)="setFilter('Overdue')"><span class="metric-icon red">!</span><span><b>Overdue</b><strong class="danger-text">{{ data.overdue }}</strong><small>Past effective due time</small></span></button>
+          <button type="button" (click)="setFilter('Evidence Pending')"><span class="metric-icon slate">⌕</span><span><b>Evidence pending</b><strong>{{ data.evidencePending }}</strong><small>Missing, provided or rejected</small></span></button>
+        </section> }
         <section class="tracker-panel">
-          <div class="panel-heading"><div><h3>Upcoming obligations</h3><span>{{ filtered().length }} authorized records</span></div><div class="heading-actions"><button class="link-button" type="button" (click)="setFilter('All')">View all</button><button class="primary" type="button" (click)="filtered()[0] && openRecord(filtered()[0])">Record sending</button></div></div>
-          <div class="filter-row"><span>Quick filters</span>@for (filter of ['All','Internal','BB','Correction','Overdue']; track filter) {<button type="button" [class.active]="activeFilter() === filter" (click)="setFilter(filter)">{{ filter }}</button>}</div>
-          <div class="table-wrap"><table><thead><tr><th>Report / obligation</th><th>Period</th><th>Type</th><th>Owner</th><th>Due date</th><th>Sending status</th><th>Receipt / evidence</th><th><span class="sr-only">Action</span></th></tr></thead><tbody>
-            @for (row of filtered(); track row.id) {<tr><td><strong>{{ row.report }}</strong><span>{{ row.obligation }}</span></td><td>{{ row.period }}</td><td><span class="type-label" [class]="row.type.toLowerCase()">{{ row.type }}</span></td><td>{{ row.owner }}</td><td><strong>{{ row.dueAtUtc | date:'dd MMM y':'Asia/Dhaka' }}</strong><span [class.overdue-text]="row.timeliness === 'Overdue'">{{ row.timeliness }}</span></td><td><span class="status" [class]="statusClass(row.sendingStatus)">{{ row.sendingStatus }}</span></td><td><span class="status" [class]="statusClass(row.receiptStatus === 'Not Required' ? row.evidenceStatus : row.receiptStatus)">{{ row.receiptStatus === 'Not Required' ? row.evidenceStatus : row.receiptStatus }}</span></td><td><button class="outline" type="button" (click)="openRecord(row)">Record sending</button></td></tr>} @empty {<tr><td colspan="8" class="empty">No obligations match this view.</td></tr>}
+          <div class="panel-heading"><div><h3>{{ view() === 'Calendar' ? 'Deadline agenda' : 'Reporting obligations' }}</h3><span>{{ filtered().length }} authorized records</span></div><div class="heading-actions"><label class="search"><input [ngModel]="search()" (ngModelChange)="search.set($event)" placeholder="Search reports, periods, owners…" aria-label="Search obligations"></label><button class="secondary" type="button" (click)="reload()" [disabled]="loading()">Refresh</button></div></div>
+          <div class="filter-row"><span>Quick filters</span>@for (filter of ['All','Internal','BB','Correction','Due Today','Overdue','Not Sent','Partially Sent','Sent','Evidence Pending']; track filter) { <button type="button" [class.active]="activeFilter() === filter" (click)="setFilter(filter)">{{ filter }}</button> }</div>
+          <div class="table-wrap"><table><thead><tr><th>Report / obligation</th><th>Period</th><th>Type</th><th>Owner</th><th>Due date</th><th>Sending</th><th>Receipt / evidence</th><th>Actions</th></tr></thead><tbody>
+            @for (row of filtered(); track row.id) { <tr><td><strong>{{ row.report }}</strong><span>{{ row.obligation }}</span></td><td>{{ row.period }}</td><td><span class="type-label" [class]="row.type.toLowerCase()">{{ row.type }}</span></td><td>{{ row.owner }}</td><td><strong>{{ row.dueAtUtc | date:'dd MMM y, HH:mm':'+0600' }}</strong><span [class.overdue-text]="row.timeliness === 'Overdue' || row.timeliness === 'Sent Late'">{{ row.timeliness }}</span></td><td><span class="status" [class]="statusClass(row.sendingStatus)">{{ row.sendingStatus }}</span></td><td><span>{{ row.receiptStatus }}</span><span>Evidence: {{ row.evidenceStatus }}</span></td><td><div class="row-actions">@if (row.canRecordSending) { <button class="outline" type="button" (click)="openRecord(row)">Record sending</button> }<button class="link-button" type="button" (click)="openHistory(row)">History</button></div></td></tr> }
+            @empty { <tr><td colspan="8" class="empty">No obligations match this view. @if (canSetup()) { <button class="link-button" type="button" (click)="navigate('Report Setup')">Set up reports and create a cycle</button> }</td></tr> }
           </tbody></table></div>
         </section>
-        <section class="insights">
-          <article class="performance"><div class="article-heading"><div><h3>Submission performance</h3><span>October 2026 · all obligations</span></div><button class="link-button">Monitoring report</button></div><div class="bars">@for (item of data.performance; track item.status) {<div class="bar-item"><div class="bar-track"><div class="bar-fill" [class]="statusClass(item.status)" [style.height.%]="item.count / 14 * 100"><b>{{ item.count }}</b></div></div><span>{{ item.status }}</span></div>}</div></article>
-          <article class="calendar-card"><div class="article-heading"><div><h3>Deadline calendar</h3><span>November 2026</span></div><button class="link-button">Open calendar</button></div><div class="calendar-summary"><div class="date-tile"><strong>12</strong><span>Thursday</span><small>Next BB deadline</small></div><ul><li><b class="red-dot">5</b><span>Overdue</span></li><li><b class="orange-dot">3</b><span>Due today</span></li><li><b class="blue-dot">6</b><span>Upcoming (next 7 days)</span></li><li><b>12</b><span>Later this month</span></li></ul></div></article>
-        </section>
-      } @else {<div class="loading">Loading authorized obligations…</div>}
+        @if (view() === 'Overview' || view() === 'Monitoring Reports') {
+          <section class="insights"><article class="performance"><div class="article-heading"><div><h3>Sending status</h3><span>All authorized obligations · each obligation counted once</span></div></div><div class="bars">@for (item of data.performance; track item.status) { <div class="bar-item"><div class="bar-track"><div class="bar-fill" [class]="statusClass(item.status)" [style.height.%]="item.count / maxPerformance() * 100"><b>{{ item.count }}</b></div></div><span>{{ item.status }}</span></div> }</div></article><article><div class="article-heading"><h3>Tracking scope</h3></div><p class="scope-description">Sending declarations, receipt acknowledgements and confirmation evidence are tracked separately. A sending record describes an event already performed outside this application.</p></article></section>
+        }
+      }
+      }
     </div>
   </main>
 </div>
 @if (selected(); as row) {
-  <div class="modal-backdrop" (click)="closeRecord()"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="record-title" (click)="$event.stopPropagation()"><div class="modal-header"><div><h2 id="record-title">Record sending</h2><p>{{ row.report }} · {{ row.period }}</p></div><button class="icon-button" type="button" (click)="closeRecord()" aria-label="Close">×</button></div><div class="notice"><strong>This records an event already performed outside the application.</strong><span>No report data or attachment will be transmitted.</span></div><form (ngSubmit)="saveRecord()"><label>Recipient<input required [value]="row.type === 'BB' ? 'Bangladesh Bank' : 'Final sending division'"></label><label>Channel<select><option>Portal</option><option>Email</option><option>Physical letter</option></select></label><label>Actual sent time<input type="datetime-local" required></label><label>Dispatch / message reference<input placeholder="Enter non-sensitive reference"></label><label class="full">Tracking remarks<textarea rows="3" placeholder="Do not include report contents"></textarea></label><div class="modal-actions"><button class="secondary" type="button" (click)="closeRecord()">Cancel</button><button class="primary" type="submit">Save sending record</button></div></form></section></div>
+  <dialog #recordDialog class="modal" aria-labelledby="record-title" (cancel)="closeRecord($event)"><div class="modal-header"><div><h2 id="record-title">Record sending</h2><p>{{ row.report }} · {{ row.period }} · {{ row.obligation }}</p></div><button class="icon-button" type="button" (click)="closeRecord()" [disabled]="saving()" aria-label="Close">×</button></div><div class="notice"><strong>This records an event already performed outside the application.</strong><span>No business report data or attachment will be transmitted.</span></div>
+    @if (recordError()) { <div class="error-banner" role="alert">{{ recordError() }} @if (!saving()) { <button type="button" (click)="closeRecord(); reload()">Close and refresh</button> }</div> }
+    <form #recordForm="ngForm" (ngSubmit)="saveRecord(recordForm)">
+      <label>Recipient<input name="recipient" [(ngModel)]="form.recipient" required maxlength="250"></label>
+      <label>Channel<select name="channel" [(ngModel)]="form.channel"><option>Portal</option><option>Email</option><option>Physical letter</option><option>Other</option></select></label>
+      <label>Actual sent time (Asia/Dhaka)<input type="datetime-local" name="actualSent" [(ngModel)]="form.actualSentLocal" required></label>
+      <label>Dispatch / message reference<input name="reference" [(ngModel)]="form.reference" maxlength="250"></label>
+      <label class="checkbox full"><input type="checkbox" name="partial" [(ngModel)]="form.isPartial">This is a partial sending declaration</label>
+      @if (form.isPartial) { <label class="full">Component names included (comma separated)<input name="scopeNames" [(ngModel)]="form.scopeNames" required maxlength="5000" placeholder="Component names only"></label> }
+      <label class="full">Tracking remarks<textarea name="remarks" [(ngModel)]="form.trackingRemarks" rows="3" maxlength="1000" placeholder="Do not include report contents"></textarea></label>
+      <div class="modal-actions"><button class="secondary" type="button" (click)="closeRecord()" [disabled]="saving()">Cancel</button><button class="primary" type="submit" [disabled]="saving() || recordForm.invalid || (form.isPartial && !form.scopeNames.trim())">{{ saving() ? 'Saving…' : 'Save sending record' }}</button></div>
+    </form>
+  </dialog>
 }
-@if (toast()) {<div class="toast" role="status">✓ {{ toast() }}</div>}
+@if (historyRow(); as row) {
+  <dialog #historyDialog class="modal history-modal" aria-labelledby="history-title" (cancel)="historyRow.set(null)"><div class="modal-header"><div><h2 id="history-title">Sending history</h2><p>{{ row.report }} · {{ row.obligation }}</p></div><button class="icon-button" type="button" (click)="historyRow.set(null)" aria-label="Close history">×</button></div><div class="history-content">
+    @if (historyLoading()) { <p role="status">Loading history…</p> }
+    @if (historyError()) { <p class="error-banner" role="alert">{{ historyError() }}</p> }
+    @for (item of history(); track item.id) { <article class="history-item"><strong>{{ item.isPartial ? 'Partial sending' : 'Full sending' }} · {{ item.channel }}</strong><p>Actual sending: {{ item.actualSentAtUtc | date:'dd MMM y, HH:mm':'+0600' }}</p><p>Recorded: {{ item.recordedAtUtc | date:'dd MMM y, HH:mm':'+0600' }} by {{ item.actor }}</p><p>Recipient: {{ item.recipient }}</p>@if (item.reference) { <p>Reference: {{ item.reference }}</p> }@if (item.scopeNames) { <p>Components: {{ item.scopeNames }}</p> }@if (item.trackingRemarks) { <p>{{ item.trackingRemarks }}</p> }</article> } @empty { @if (!historyLoading() && !historyError()) { <p>No sending records yet.</p> } }
+  </div></dialog>
+}
+@if (toast()) { <div class="toast" role="status">✓ {{ toast() }}</div> }
+}
+
+
