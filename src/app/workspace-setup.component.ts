@@ -1,6 +1,6 @@
 import { Component, OnInit, inject, input, output, signal } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
-import { forkJoin } from 'rxjs';
+import { forkJoin, Observable } from 'rxjs';
 import { DashboardService, SessionService, apiError } from './dashboard.service';
 import { Lookups, ReportDefinition, UserItem } from './dashboard.models';
 
@@ -21,6 +21,7 @@ import { Lookups, ReportDefinition, UserItem } from './dashboard.models';
           <label>Employee ID<input name="employeeId" [(ngModel)]="user.employeeId" required maxlength="40"></label>
           <label>Display name<input name="displayName" [(ngModel)]="user.displayName" required maxlength="150"></label>
           <label>Email<input name="email" type="email" [(ngModel)]="user.email" required email maxlength="254" autocomplete="off"></label>
+          <label>Mobile number<input name="mobileNumber" [(ngModel)]="user.mobileNumber" maxlength="30" placeholder="+8801…"></label>
           <label>Division<select name="divisionId" [(ngModel)]="user.divisionId" required><option value="">Choose division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
           <label>Initial password<input name="password" type="password" [(ngModel)]="user.password" required minlength="12" maxlength="128" autocomplete="new-password"></label>
           <label class="checkbox"><input name="coordinator" type="checkbox" [(ngModel)]="user.isCoordinator">Report Coordinator for this division</label>
@@ -28,7 +29,7 @@ import { Lookups, ReportDefinition, UserItem } from './dashboard.models';
           <button class="primary" type="submit" [disabled]="busy() || userForm.invalid">Create user</button>
         </form></article>
       </section>
-      <section class="tracker-panel"><div class="panel-heading"><h3>Users</h3></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Employee ID</th><th>Email</th><th>Roles</th><th>Status</th></tr></thead><tbody>@for (u of users(); track u.id) { <tr><td>{{ u.displayName }}</td><td>{{ u.employeeId }}</td><td>{{ u.email }}</td><td>{{ u.roles.join(', ') || 'Assigned officer' }}</td><td>{{ u.isActive ? 'Active' : 'Inactive' }}</td></tr> }</tbody></table></div></section>
+      <section class="tracker-panel"><div class="panel-heading"><h3>Users</h3></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Employee ID</th><th>Contact</th><th>Roles</th><th>Status</th><th>Security actions</th></tr></thead><tbody>@for (u of users(); track u.id) { <tr><td>{{ u.displayName }}</td><td>{{ u.employeeId }}</td><td>{{ u.email }}<span>{{u.mobileNumber || 'No mobile number'}}</span></td><td>{{ u.roles.join(', ') || 'Assigned officer' }}</td><td><span class="status" [class.sent]="u.isActive">{{ u.isActive ? 'Active' : 'Inactive' }}</span></td><td><div class="row-actions"><button class="link-button" type="button" (click)="toggleUser(u)">{{u.isActive?'Deactivate':'Activate'}}</button><button class="link-button" type="button" (click)="resetUserPassword(u)">Reset password</button></div></td></tr> }</tbody></table></div></section>
     } @else {
       <section class="setup-grid">
         <article class="setup-card"><h3>Create report definition</h3><form #reportForm="ngForm" (ngSubmit)="addReport(reportForm)">
@@ -37,6 +38,7 @@ import { Lookups, ReportDefinition, UserItem } from './dashboard.models';
           <label>Owner division<select name="ownerDivisionId" [(ngModel)]="report.ownerDivisionId" required><option value="">Choose division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
           <label>BB recipient<input name="bbRecipient" [(ngModel)]="report.bbRecipient" required maxlength="250"></label>
           <label>Frequency<select name="frequency" [(ngModel)]="report.frequency">@for (f of frequencies; track f) { <option [value]="f">{{ f }}</option> }</select></label>
+          <div class="form-grid"><label>Main deadline time<input name="dueTime" type="time" [(ngModel)]="report.dueTime" required></label><label>Default component lead days<input name="componentDeadlineOffsetDays" type="number" min="0" max="365" [(ngModel)]="report.componentDeadlineOffsetDays" required></label></div>
           <label>Instruction reference<input name="instructionReference" [(ngModel)]="report.instructionReference" maxlength="250"></label>
           <label>Description<textarea name="description" [(ngModel)]="report.description" maxlength="1000" rows="2"></textarea></label>
           <button class="primary" type="submit" [disabled]="busy() || reportForm.invalid">Create report</button>
@@ -78,10 +80,10 @@ export class WorkspaceSetupComponent implements OnInit {
   protected readonly busy = signal(false);
   protected readonly error = signal('');
   protected readonly message = signal('');
-  protected readonly frequencies = ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'HalfYearly', 'Yearly', 'AdHoc'];
+  protected readonly frequencies = ['Daily', 'Weekly', 'Biweekly', 'Monthly', 'Quarterly', 'HalfYearly', 'Yearly', 'AdHoc'];
   protected division = { code: '', name: '' };
-  protected user = { employeeId: '', displayName: '', email: '', divisionId: '', password: '', isCoordinator: false };
-  protected report = { code: '', name: '', ownerDivisionId: this.session.user()?.divisionId ?? '', bbRecipient: '', frequency: 'Monthly', instructionReference: '', description: '' };
+  protected user = { employeeId: '', displayName: '', email: '', mobileNumber: '', divisionId: '', password: '', isCoordinator: false };
+  protected report = { code: '', name: '', ownerDivisionId: this.session.user()?.divisionId ?? '', bbRecipient: '', frequency: 'Monthly', dueTime: '17:00', componentDeadlineOffsetDays: 1, instructionReference: '', description: '' };
   protected cycle = { reportId: '', periodKey: '', periodLabel: '', periodStart: '', periodEnd: '' };
   protected tasks = [this.newTask()];
   ngOnInit() { this.load(); }
@@ -97,7 +99,9 @@ export class WorkspaceSetupComponent implements OnInit {
   protected addTask() { this.tasks = [...this.tasks, { ...this.newTask(), type: 'Internal', name: '', recipient: '' }]; }
   protected removeTask(index: number) { if (this.tasks.length > 1) this.tasks = this.tasks.filter((_, i) => i !== index); }
   protected addDivision(form: NgForm) { if (form.invalid || this.busy()) return; this.save(this.api.createDivision(this.division), 'Division created.', () => { this.division = { code: '', name: '' }; }); }
-  protected addUser(form: NgForm) { if (form.invalid || this.busy()) return; this.save(this.api.createUser(this.user), 'User created.', () => { this.user = { employeeId: '', displayName: '', email: '', divisionId: '', password: '', isCoordinator: false }; }); }
+  protected addUser(form: NgForm) { if (form.invalid || this.busy()) return; this.save(this.api.createUser(this.user), 'User created.', () => { this.user = { employeeId: '', displayName: '', email: '', mobileNumber: '', divisionId: '', password: '', isCoordinator: false }; }); }
+  protected toggleUser(user:UserItem){this.save(this.api.changeUserStatus(user.id,!user.isActive),`User ${user.isActive?'deactivated':'activated'}.`,()=>{});}
+  protected resetUserPassword(user:UserItem){const password=window.prompt(`Enter a temporary password for ${user.displayName} (minimum 12 characters):`);if(!password)return;if(password.length<12){this.error.set('Temporary password must contain at least 12 characters.');return;}this.save(this.api.resetPassword(user.id,password),'Password reset completed.',()=>{});}
   protected addReport(form: NgForm) { if (form.invalid || this.busy()) return; this.save(this.api.createReport(this.report), 'Report definition created.', () => { this.report = { ...this.report, code: '', name: '', description: '', instructionReference: '' }; }); }
   protected addCycle(form: NgForm) {
     if (form.invalid || this.busy()) return;
@@ -105,7 +109,7 @@ export class WorkspaceSetupComponent implements OnInit {
     this.save(this.api.createCycle(this.cycle.reportId, { ...this.cycle, obligations }), 'Reporting cycle created. Obligations are now available in the trackers.', () => { this.cycle = { reportId: '', periodKey: '', periodLabel: '', periodStart: '', periodEnd: '' }; this.tasks = [this.newTask()]; });
   }
   private newTask() { return { name: 'BB submission', type: 'BB', divisionId: this.session.user()?.divisionId ?? '', primaryOfficerId: this.session.user()?.id ?? '', deputyOfficerId: '', recipient: '', dueLocal: '', receiptRequired: false, evidenceRequired: false }; }
-  private save(request: ReturnType<DashboardService['createReport']>, message: string, reset: () => void) {
+  private save(request: Observable<unknown>, message: string, reset: () => void) {
     this.busy.set(true); this.error.set(''); this.message.set('');
     request.subscribe({ next: () => { this.busy.set(false); reset(); this.message.set(message); this.changed.emit(); this.load(); }, error: error => { this.busy.set(false); this.error.set(apiError(error)); } });
   }

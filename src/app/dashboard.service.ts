@@ -1,7 +1,7 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { catchError, switchMap, tap, throwError } from 'rxjs';
-import { DashboardSummary, SendingRecord, SendingHistory, SessionResponse, SessionUser, Lookups, ReportDefinition, UserItem } from './dashboard.models';
+import { DashboardSummary, SendingRecord, SendingHistory, SessionResponse, SessionUser, Lookups, ReportDefinition, UserItem, ComponentDefinition, SubmissionReadiness, EvidenceItem, ExtensionItem, ReminderPolicy, NotificationItem, CalendarItem, ManagementAnalytics } from './dashboard.models';
 
 export function apiError(error: unknown): string {
   if (error instanceof HttpErrorResponse) {
@@ -40,6 +40,28 @@ export class DashboardService {
   users() { return this.http.get<UserItem[]>('/api/setup/users'); }
   createUser(body: unknown) { return this.http.post('/api/setup/users', body); }
   createDivision(body: unknown) { return this.http.post('/api/setup/divisions', body); }
+  components(reportId: string) { return this.http.get<ComponentDefinition[]>(`/api/report-definitions/${reportId}/components`); }
+  createComponent(reportId: string, body: unknown) { return this.http.post<ComponentDefinition>(`/api/report-definitions/${reportId}/components`, body); }
+  readiness(cycleId: string) { return this.http.get<SubmissionReadiness>(`/api/report-cycles/${cycleId}/readiness`); }
+  evidence(obligationId:string) { return this.http.get<EvidenceItem[]>(`/api/obligations/${obligationId}/evidence`); }
+  uploadEvidence(obligationId:string, file:File) { const body=new FormData(); body.append('file',file); return this.http.post<EvidenceItem>(`/api/obligations/${obligationId}/evidence`,body); }
+  decideEvidence(id:string, decision:string, reason:string|null) { return this.http.post<void>(`/api/evidence/${id}/decision`,{decision,reason}); }
+  confirmReceipt(obligationId:string, body:unknown) { return this.http.post(`/api/obligations/${obligationId}/receipts`,body); }
+  amendStatus(obligationId:string, body:unknown) { return this.http.post<void>(`/api/obligations/${obligationId}/amendments`,body); }
+  extensions() { return this.http.get<ExtensionItem[]>('/api/extensions'); }
+  requestExtension(obligationId:string, body:unknown) { return this.http.post(`/api/obligations/${obligationId}/extensions`,body); }
+  decideExtension(id:string, body:unknown) { return this.http.post<void>(`/api/extensions/${id}/decision`,body); }
+  reminderPolicies() { return this.http.get<ReminderPolicy[]>('/api/reminders/policies'); }
+  createReminderPolicy(body:unknown) { return this.http.post('/api/reminders/policies',body); }
+  notificationDeliveries() { return this.http.get<NotificationItem[]>('/api/reminders/deliveries'); }
+  planReminders() { return this.http.post('/api/reminders/plan',{}); }
+  dispatchReminders() { return this.http.post('/api/reminders/dispatch',{}); }
+  retryNotification(id:string) { return this.http.post<void>(`/api/reminders/jobs/${id}/retry`,{}); }
+  calendar(fromUtc:string,toUtc:string) { return this.http.get<CalendarItem[]>('/api/operations/calendar',{params:{fromUtc,toUtc}}); }
+  analytics() { return this.http.get<ManagementAnalytics>('/api/operations/analytics'); }
+  generateCycles(through:string) { return this.http.post('/api/automation/generate-cycles',{}, {params:{through}}); }
+  changeUserStatus(id:string,isActive:boolean) { return this.http.patch<void>(`/api/setup/users/${id}/status`,{isActive}); }
+  resetPassword(id:string,newPassword:string) { return this.http.post<void>(`/api/setup/users/${id}/reset-password`,{newPassword}); }
 }
 
 
