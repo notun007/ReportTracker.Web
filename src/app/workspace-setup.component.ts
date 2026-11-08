@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, input, output, signal } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, input, output, signal } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { forkJoin, Observable } from 'rxjs';
 import { DashboardService, SessionService, apiError } from './dashboard.service';
@@ -9,6 +9,7 @@ import { Lookups, ReportDefinition, UserItem } from './dashboard.models';
   template: `
     @if (error()) { <div class="error-banner" role="alert">{{ error() }} <button type="button" (click)="load()">Retry</button></div> }
     @if (message()) { <div class="success-banner" role="status">{{ message() }}</div> }
+    @if (divisionToast()) { <div class="toast division-error-toast" role="alert"><span class="toast-icon" aria-hidden="true">!</span><span class="toast-message">{{ divisionToast() }}</span><button type="button" (click)="dismissDivisionToast()" aria-label="Dismiss division error">×</button></div> }
     @if (loading()) { <p class="loading">Loading workspace setup…</p> }
     @else if (mode() === 'Administration') {
       <section class="setup-grid">
@@ -68,7 +69,7 @@ import { Lookups, ReportDefinition, UserItem } from './dashboard.models';
     }
   `
 })
-export class WorkspaceSetupComponent implements OnInit {
+export class WorkspaceSetupComponent implements OnInit, OnDestroy {
   readonly mode = input.required<string>();
   readonly changed = output<void>();
   private readonly api = inject(DashboardService);
@@ -80,6 +81,8 @@ export class WorkspaceSetupComponent implements OnInit {
   protected readonly busy = signal(false);
   protected readonly error = signal('');
   protected readonly message = signal('');
+  protected readonly divisionToast = signal('');
+  private divisionToastTimer: ReturnType<typeof setTimeout> | undefined;
   protected readonly frequencies = ['Daily', 'Weekly', 'Biweekly', 'Monthly', 'Quarterly', 'HalfYearly', 'Yearly', 'AdHoc'];
   protected division = { code: '', name: '' };
   protected user = { employeeId: '', displayName: '', email: '', mobileNumber: '', divisionId: '', password: '', isCoordinator: false };
@@ -87,6 +90,7 @@ export class WorkspaceSetupComponent implements OnInit {
   protected cycle = { reportId: '', periodKey: '', periodLabel: '', periodStart: '', periodEnd: '' };
   protected tasks = [this.newTask()];
   ngOnInit() { this.load(); }
+  ngOnDestroy() { clearTimeout(this.divisionToastTimer); }
   protected officers(divisionId: string) { return this.lookups().officers.filter(u => u.divisionId === divisionId); }
   protected load() {
     this.loading.set(true); this.error.set('');
@@ -98,7 +102,22 @@ export class WorkspaceSetupComponent implements OnInit {
   protected selectReport() { const r = this.reports().find(r => r.id === this.cycle.reportId); if (r && this.tasks[0]) this.tasks[0].recipient = r.bbRecipient; }
   protected addTask() { this.tasks = [...this.tasks, { ...this.newTask(), type: 'Internal', name: '', recipient: '' }]; }
   protected removeTask(index: number) { if (this.tasks.length > 1) this.tasks = this.tasks.filter((_, i) => i !== index); }
-  protected addDivision(form: NgForm) { if (form.invalid || this.busy()) return; this.save(this.api.createDivision(this.division), 'Division created.', () => { this.division = { code: '', name: '' }; }); }
+  protected addDivision(form: NgForm) {
+    if (form.invalid || this.busy()) return;
+    this.busy.set(true); this.error.set(''); this.message.set(''); this.dismissDivisionToast();
+    this.api.createDivision({ code: this.division.code.trim(), name: this.division.name.trim() }).subscribe({
+      next: () => {
+        this.busy.set(false); this.division = { code: '', name: '' }; this.message.set('Division created.');
+        this.changed.emit(); this.load();
+      },
+      error: error => {
+        this.busy.set(false);
+        this.divisionToast.set(apiError(error));
+        this.divisionToastTimer = setTimeout(() => this.divisionToast.set(''), 8000);
+      }
+    });
+  }
+  protected dismissDivisionToast() { clearTimeout(this.divisionToastTimer); this.divisionToast.set(''); }
   protected addUser(form: NgForm) { if (form.invalid || this.busy()) return; this.save(this.api.createUser(this.user), 'User created.', () => { this.user = { employeeId: '', displayName: '', email: '', mobileNumber: '', divisionId: '', password: '', isCoordinator: false }; }); }
   protected toggleUser(user:UserItem){this.save(this.api.changeUserStatus(user.id,!user.isActive),`User ${user.isActive?'deactivated':'activated'}.`,()=>{});}
   protected resetUserPassword(user:UserItem){const password=window.prompt(`Enter a temporary password for ${user.displayName} (minimum 12 characters):`);if(!password)return;if(password.length<12){this.error.set('Temporary password must contain at least 12 characters.');return;}this.save(this.api.resetPassword(user.id,password),'Password reset completed.',()=>{});}
@@ -114,3 +133,5 @@ export class WorkspaceSetupComponent implements OnInit {
     request.subscribe({ next: () => { this.busy.set(false); reset(); this.message.set(message); this.changed.emit(); this.load(); }, error: error => { this.busy.set(false); this.error.set(apiError(error)); } });
   }
 }
+
+

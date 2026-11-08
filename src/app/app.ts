@@ -49,7 +49,7 @@ export class App {
     'Reporting Overview', 'Report Register', ...(this.canSetup() ? ['Report Setup', 'Components and Responsibilities'] : []),
     'Component Submission', 'Submission Readiness', 'Main Report Submission', 'Deadline Extensions', 'Reminder Settings', 'Reporting Calendar'
   ]);
-  protected readonly divisions = computed(() => this.unique((this.dashboard()?.upcoming ?? []).map(row => row.owner.split('·')[1]?.trim()).filter(Boolean) as string[]));
+  protected readonly divisions = computed(() => [...new Map((this.dashboard()?.upcoming ?? []).filter(row => row.divisionId && row.division).map(row => [row.divisionId, { id: row.divisionId, name: row.division }])).values()].sort((a, b) => a.name.localeCompare(b.name)));
   protected readonly reports = computed(() => this.unique((this.dashboard()?.upcoming ?? []).map(row => row.report)));
   protected readonly owners = computed(() => this.unique((this.dashboard()?.upcoming ?? []).map(row => row.owner.split('·')[0].trim())));
   protected readonly filtered = computed(() => {
@@ -59,7 +59,7 @@ export class App {
       (!['Submission Readiness', 'Main Report Submission'].includes(view) || row.type === 'BB') &&
       (filter === 'All' || (filter === 'My Pending' && row.isAssignedToMe && row.sendingStatus !== 'Sent') || row.timeliness === filter || row.type === filter || row.sendingStatus === filter ||
         (filter === 'Evidence Pending' && ['Missing', 'Provided', 'Rejected'].includes(row.evidenceStatus))) &&
-      (this.divisionFilter() === 'All divisions' || row.owner.includes(`· ${this.divisionFilter()}`)) &&
+      (this.divisionFilter() === 'All divisions' || row.divisionId === this.divisionFilter()) &&
       (this.reportFilter() === 'All reports' || row.report === this.reportFilter()) &&
       (this.ownerFilter() === 'All owners' || row.owner.startsWith(this.ownerFilter())) &&
       (this.deadlineFilter() === 'All dates' || row.timeliness === this.deadlineFilter()) &&

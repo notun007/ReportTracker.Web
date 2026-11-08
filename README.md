@@ -11,7 +11,7 @@ npm ci
 npm start
 ```
 
-Start the API on `http://localhost:5092`, then open `http://localhost:4200`. `proxy.conf.json` forwards `/api` to that API.
+Start the API on the selected development profile, then open `http://localhost:4200`. `proxy.conf.json` forwards `/api` to that API.
 
 The first visit creates the initial workspace account. Afterward, sign in with a local account. The session cookie is HttpOnly; Angular supplies the CSRF header for same-origin updates. Passwords and bearer tokens are never stored in browser local storage. API failures produce visible errors rather than demo rows.
 
@@ -29,3 +29,7 @@ node node_modules/typescript/bin/tsc -p tsconfig.app.json --noEmit
 Production hosting should serve the client and `/api` through one HTTPS origin. The development proxy is not part of the production bundle.
 
 See the API project's `BB_Reporting_Tracker_Plan.md` and README for the requirements baseline and remaining workflows.
+
+
+For Visual Studio IIS Express, the default proxy connects directly to https://localhost:44332 with local certificate verification disabled. Do not target its HTTP port: IIS redirects to HTTPS, which would move API requests out of the client origin and prevent the browser token exchange from completing. The browser continues to use http://localhost:4200.
+

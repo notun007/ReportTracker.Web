@@ -23,9 +23,9 @@ export class SessionService {
     tap(data => { this.user.set(data.user); this.setupRequired.set(data.setupRequired); this.available.set(true); }),
     catchError(error => { this.available.set(false); return throwError(() => error); })
   ); }
-  login(body: unknown) { return this.http.post('/api/auth/login', body).pipe(switchMap(() => this.load())); }
-  setup(body: unknown) { return this.http.post('/api/auth/setup', body).pipe(switchMap(() => this.load())); }
-  logout() { return this.http.post('/api/auth/logout', {}).pipe(switchMap(() => this.load())); }
+  login(body: unknown) { return this.load().pipe(switchMap(() => this.http.post('/api/auth/login', body)), switchMap(() => this.load())); }
+  setup(body: unknown) { return this.load().pipe(switchMap(() => this.http.post('/api/auth/setup', body)), switchMap(() => this.load())); }
+  logout() { return this.load().pipe(switchMap(() => this.http.post('/api/auth/logout', {})), switchMap(() => this.load())); }
 }
 @Injectable({ providedIn: 'root' })
 export class DashboardService {
@@ -63,5 +63,6 @@ export class DashboardService {
   changeUserStatus(id:string,isActive:boolean) { return this.http.patch<void>(`/api/setup/users/${id}/status`,{isActive}); }
   resetPassword(id:string,newPassword:string) { return this.http.post<void>(`/api/setup/users/${id}/reset-password`,{newPassword}); }
 }
+
 
 

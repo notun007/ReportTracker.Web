@@ -1,6 +1,6 @@
 export interface Obligation {
   id: string; cycleId: string; report: string; period: string; obligation: string;
-  type: 'Internal' | 'BB' | 'Correction'; owner: string; dueAtUtc: string;
+  type: 'Internal' | 'BB' | 'Correction'; owner: string; divisionId: string; division: string; dueAtUtc: string;
   timeliness: string; sendingStatus: string; receiptStatus: string; evidenceStatus: string;
   recipient: string; rowVersion: string; canRecordSending: boolean; isAssignedToMe: boolean;
   requiredComponentCount: number; completedComponentCount: number; isReadyForSubmission: boolean;
