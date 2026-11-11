@@ -18,14 +18,13 @@ import { DashboardService, apiError } from './dashboard.service';
         <h3>Add report component</h3>
         <form #componentForm="ngForm" (ngSubmit)="save(componentForm)">
           <label>Report<select name="reportId" [disabled]="saving()" [(ngModel)]="reportId" (ngModelChange)="loadComponents()" required><option value="">Choose report</option>@for (report of reports(); track report.id) { <option [value]="report.id">{{ report.code }} — {{ report.name }}</option> }</select></label>
+          @if (reportId && !reportReceiver()) { <p role="status">Set the receiving division in Report Setup before adding components to this report.</p> }
           <label>Component name<input name="name" [(ngModel)]="form.name" required maxlength="250"></label>
           <label>Description<textarea name="description" [(ngModel)]="form.description" maxlength="1000" rows="3"></textarea></label>
           <div class="form-grid">
             <label>Preparing division<select name="providerDivisionId" [(ngModel)]="form.providerDivisionId" (ngModelChange)="form.primaryOfficerId=''; form.deputyOfficerId=''" required><option value="">Choose division</option>@for (division of lookups().divisions; track division.id) { <option [value]="division.id">{{ division.name }}</option> }</select></label>
-            <label>Receiving division<select name="receivingDivisionId" [(ngModel)]="form.receivingDivisionId" required><option value="">Choose division</option>@for (division of lookups().divisions; track division.id) { <option [value]="division.id">{{ division.name }}</option> }</select></label>
             <label>Primary officer<select name="primaryOfficerId" [(ngModel)]="form.primaryOfficerId" required><option value="">Choose officer</option>@for (officer of officers(form.providerDivisionId); track officer.id) { <option [value]="officer.id">{{ officer.name }}</option> }</select></label>
             <label>Deputy officer<select name="deputyOfficerId" [(ngModel)]="form.deputyOfficerId"><option value="">None</option>@for (officer of officers(form.providerDivisionId); track officer.id) { <option [value]="officer.id">{{ officer.name }}</option> }</select></label>
-            <label>Deadline lead days<input name="deadlineOffsetDays" type="number" min="0" max="365" [(ngModel)]="form.deadlineOffsetDays" required></label>
             <label>Display order<input name="sequence" type="number" min="0" max="999" [(ngModel)]="form.sequence" required></label>
           </div>
           @if (form.providerDivisionId && officers(form.providerDivisionId).length === 0) {
@@ -36,7 +35,7 @@ import { DashboardService, apiError } from './dashboard.service';
             <label class="checkbox"><input type="checkbox" name="evidence" [(ngModel)]="form.evidenceRequired">Evidence required</label>
             <label class="checkbox"><input type="checkbox" name="receipt" [(ngModel)]="form.receiptRequired">Receipt confirmation required</label>
           </div>
-          <button class="primary" type="submit" [disabled]="saving() || componentForm.invalid || !reportId">{{ saving() ? 'Saving…' : 'Add component' }}</button>
+          <button class="primary" type="submit" [disabled]="saving() || componentForm.invalid || !reportId || !reportReceiver()">{{ saving() ? 'Saving…' : 'Add component' }}</button>
         </form>
       </aside>
       <section class="tracker-panel component-list">
@@ -79,6 +78,7 @@ export class ComponentResponsibilitiesComponent implements OnInit {
   protected officers(divisionId: string) { return this.lookups().officers.filter(x => x.divisionId === divisionId); }
   protected divisionName(id: string) { return this.lookups().divisions.find(x => x.id === id)?.name ?? 'Unknown division'; }
   protected officerName(id: string | null) { return this.lookups().officers.find(x => x.id === id)?.name ?? 'Unassigned'; }
+  protected reportReceiver() { return this.reports().find(report => report.id === this.reportId)?.receivingDivisionId; }
   protected loadComponents() {
     this.components.set([]); this.error.set(''); this.message.set('');
     const reportId = this.reportId;
@@ -90,12 +90,12 @@ export class ComponentResponsibilitiesComponent implements OnInit {
     });
   }
   protected save(form: NgForm) {
-    if (!this.reportId || form.invalid || this.saving()) return;
+    if (!this.reportId || !this.reportReceiver() || form.invalid || this.saving()) return;
     this.saving.set(true); this.error.set(''); this.message.set('');
-    this.api.createComponent(this.reportId, { ...this.form, deputyOfficerId: this.form.deputyOfficerId || null }).subscribe({
+    this.api.createComponent(this.reportId, { ...this.form, receivingDivisionId: this.reportReceiver(), deputyOfficerId: this.form.deputyOfficerId || null }).subscribe({
       next: row => { this.components.update(rows => [...rows, row].sort((a, b) => a.sequence - b.sequence)); this.form = this.emptyForm(); form.resetForm({ ...this.form, reportId: this.reportId }); this.message.set('Component saved. This defines an input for reporting cycles; existing cycles are unchanged.'); this.saving.set(false); },
       error: error => { this.error.set(apiError(error)); this.saving.set(false); }
     });
   }
-  private emptyForm() { return { name: '', description: '', isRequired: true, sequence: 0, providerDivisionId: '', primaryOfficerId: '', deputyOfficerId: '', receivingDivisionId: '', receiptRequired: false, evidenceRequired: false, deadlineOffsetDays: 1 }; }
+  private emptyForm() { return { name: '', description: '', isRequired: true, sequence: 0, providerDivisionId: '', primaryOfficerId: '', deputyOfficerId: '', receiptRequired: false, evidenceRequired: false }; }
 }

@@ -1,7 +1,7 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { catchError, switchMap, tap, throwError } from 'rxjs';
-import { DashboardSummary, SendingRecord, SendingHistory, SessionResponse, SessionUser, Lookups, ReportDefinition, UserItem, ComponentDefinition, SubmissionReadiness, EvidenceItem, ExtensionItem, ReminderPolicy, NotificationItem, CalendarItem, ManagementAnalytics } from './dashboard.models';
+import { Lookup, SubmissionDestination, SubmissionRecipient, ObligationActions, ReceiptItem, ReportingCycle, DashboardSummary, SendingRecord, SendingHistory, SessionResponse, SessionUser, Lookups, ReportDefinition, UserItem, ComponentDefinition, SubmissionReadiness, EvidenceItem, ExtensionItem, ReminderPolicy, NotificationItem, CalendarItem, ManagementAnalytics } from './dashboard.models';
 
 export function apiError(error: unknown): string {
   if (error instanceof HttpErrorResponse) {
@@ -35,7 +35,16 @@ export class DashboardService {
   history(id: string) { return this.http.get<SendingHistory[]>(`/api/obligations/${id}/history`); }
   lookups() { return this.http.get<Lookups>('/api/setup/lookups'); }
   reports() { return this.http.get<ReportDefinition[]>('/api/setup/reports'); }
+  submissionRecipients() { return this.http.get<SubmissionRecipient[]>('/api/setup/submission-recipients'); }
+  createSubmissionRecipient(name: string) { return this.http.post<Lookup>('/api/setup/submission-recipients', {name}); }
+  createSubmissionDepartment(recipientId: string, name: string) { return this.http.post<Lookup>(`/api/setup/submission-recipients/${recipientId}/departments`, {name}); }
+  createSubmissionDepartments(recipientId: string, names: string[]) {
+    return this.http.post<Lookup[]>(`/api/setup/submission-recipients/${recipientId}/departments/batch`, {names});
+  }
+  setSubmissionDestination(reportId: string, destination: SubmissionDestination) { return this.http.put<void>(`/api/setup/reports/${reportId}/submission-destination`, destination); }
   createReport(body: unknown) { return this.http.post('/api/setup/reports', body); }
+  setReportResponsibilities(id:string,body:unknown) { return this.http.put<void>(`/api/setup/reports/${id}/responsibilities`,body); }
+  cycles(id: string) { return this.http.get<ReportingCycle[]>(`/api/setup/reports/${id}/cycles`); }
   createCycle(id: string, body: unknown) { return this.http.post(`/api/setup/reports/${id}/cycles`, body); }
   users() { return this.http.get<UserItem[]>('/api/setup/users'); }
   createUser(body: unknown) { return this.http.post('/api/setup/users', body); }
@@ -43,6 +52,9 @@ export class DashboardService {
   components(reportId: string) { return this.http.get<ComponentDefinition[]>(`/api/report-definitions/${reportId}/components`); }
   createComponent(reportId: string, body: unknown) { return this.http.post<ComponentDefinition>(`/api/report-definitions/${reportId}/components`, body); }
   readiness(cycleId: string) { return this.http.get<SubmissionReadiness>(`/api/report-cycles/${cycleId}/readiness`); }
+  obligationActions(id:string) { return this.http.get<ObligationActions>(`/api/obligations/${id}/actions`); }
+  receipts(id:string) { return this.http.get<ReceiptItem[]>(`/api/obligations/${id}/receipts`); }
+  assignReceivingDivision(id:string,receivingDivisionId:string) { return this.http.patch<void>(`/api/obligations/${id}/receiving-division`,{receivingDivisionId}); }
   evidence(obligationId:string) { return this.http.get<EvidenceItem[]>(`/api/obligations/${obligationId}/evidence`); }
   uploadEvidence(obligationId:string, file:File) { const body=new FormData(); body.append('file',file); return this.http.post<EvidenceItem>(`/api/obligations/${obligationId}/evidence`,body); }
   decideEvidence(id:string, decision:string, reason:string|null) { return this.http.post<void>(`/api/evidence/${id}/decision`,{decision,reason}); }

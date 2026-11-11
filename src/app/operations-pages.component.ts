@@ -1,20 +1,26 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnChanges, inject, input, signal } from '@angular/core';
+import { Component, OnChanges, computed, inject, input, signal } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { forkJoin } from 'rxjs';
-import { CalendarItem, ExtensionItem, ManagementAnalytics, NotificationItem, ReminderPolicy, ReportDefinition } from './dashboard.models';
+import { Obligation, CalendarItem, ExtensionItem, ManagementAnalytics, NotificationItem, ReminderPolicy, ReportDefinition } from './dashboard.models';
 import { DashboardService, SessionService, apiError } from './dashboard.service';
+
+import { ExtensionRequestComponent } from './extension-request.component';
 
 @Component({
   selector: 'app-operations-pages',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, ExtensionRequestComponent],
+  styles: [`.extension-entry { max-width:840px; } .extension-entry>p { color:var(--muted); line-height:1.6; }`],
   template: `
     @if (error()) { <div class="error-banner" role="alert">{{ error() }} <button type="button" (click)="load()">Retry</button></div> }
     @if (message()) { <div class="success-banner" role="status">{{ message() }}</div> }
     @if (loading()) { <p class="loading-inline" role="status">Loading operational data…</p> }
 
     @if (page() === 'Deadline Extensions') {
-      <section class="page-intro"><div><h2>Deadline extensions</h2><p>Review requested deadline changes with a complete approval trail.</p></div><button class="secondary" (click)="load()">Refresh</button></section>
+      <section class="page-intro"><div><h2>Deadline extensions</h2><p>Request more time and review extension decisions in one place.</p></div><button class="secondary" (click)="load()">Refresh</button></section>
+      @if (!loading()) {
+        <section class="setup-card extension-entry"><h3>Request deadline extension</h3><p>Select a report task, enter the proposed deadline and explain the request.</p><app-extension-request [obligations]="extensionTasks()" [pendingIds]="pendingExtensionIds()" (submitted)="extensionSubmitted()" /></section>
+      }
       <section class="tracker-panel"><div class="panel-heading"><div><h3>Extension register</h3><span>{{ extensions().length }} requests</span></div></div><div class="table-wrap"><table><thead><tr><th>Report / obligation</th><th>Period</th><th>Current deadline</th><th>Requested deadline</th><th>Request</th><th>Status</th><th>Decision</th></tr></thead><tbody>
         @for (item of extensions(); track item.id) { <tr><td><strong>{{ item.report }}</strong><span>{{ item.obligation }}</span></td><td>{{ item.period }}</td><td>{{ item.originalDueAtUtc | date:'dd MMM y, HH:mm':'+0600' }}</td><td><strong>{{ item.requestedDueAtUtc | date:'dd MMM y, HH:mm':'+0600' }}</strong></td><td><span>{{ item.requestedBy }}</span><small>{{ item.reason }}</small>@if(item.permissionReference){<small>Ref: {{item.permissionReference}}</small>}</td><td><span class="status" [class]="item.status.toLowerCase()">{{ item.status }}</span></td><td>@if(item.status === 'Pending' && canManage()){<div class="decision-actions"><input #reason placeholder="Decision reason" aria-label="Decision reason"><button class="link-button" (click)="decide(item,'Approved',reason.value)">Approve</button><button class="link-button danger-text" (click)="decide(item,'Rejected',reason.value)">Reject</button></div>}@else{<span>{{ item.decisionReason || '—' }}</span>}</td></tr> }
         @empty { <tr><td colspan="7" class="empty">No extension requests.</td></tr> }
@@ -43,9 +49,12 @@ export class OperationsPagesComponent implements OnChanges {
   protected readonly loading=signal(false); protected readonly busy=signal(false); protected readonly error=signal(''); protected readonly message=signal('');
   protected readonly extensions=signal<ExtensionItem[]>([]); protected readonly policies=signal<ReminderPolicy[]>([]); protected readonly deliveries=signal<NotificationItem[]>([]); protected readonly calendar=signal<CalendarItem[]>([]); protected readonly reports=signal<ReportDefinition[]>([]); protected readonly analytics=signal<ManagementAnalytics|null>(null);
   protected month=new Date().toISOString().slice(0,7); protected policy={name:'Standard regulatory reminder',reportDefinitionId:null as string|null,obligationCategory:'All',leadDaysCsv:'7,3,1,0',dispatchTime:'09:00',channelsCsv:'Email,SMS',recipientsCsv:'Primary,Deputy',dailyOverdueReminders:true,workingDaysCsv:'Sun,Mon,Tue,Wed,Thu',quietHoursStart:null,quietHoursEnd:null,escalationAfterDays:1,isActive:true};
+  protected readonly extensionTasks = signal<Obligation[]>([]);
+  protected readonly pendingExtensionIds = computed(() => this.extensions().filter(item => item.status === 'Pending').map(item => item.trackingObligationId));
+  protected extensionSubmitted() { this.message.set('Extension request submitted. Awaiting approval.'); this.load(); }
   ngOnChanges(){this.load();}
   protected canManage(){return this.session.user()?.permissions.includes('reports.manage')??false;} protected canAdmin(){return this.session.user()?.permissions.includes('administration.manage')??false;}
-  protected load(){this.loading.set(true);this.error.set('');const fail=(e:unknown)=>{this.loading.set(false);this.error.set(apiError(e));};const page=this.page();if(page==='Deadline Extensions'){this.api.extensions().subscribe({next:data=>{this.extensions.set(data);this.loading.set(false);},error:fail});return;}if(page==='Reminder Settings'){forkJoin({policies:this.api.reminderPolicies(),deliveries:this.api.notificationDeliveries(),reports:this.api.reports()}).subscribe({next:data=>{this.policies.set(data.policies);this.deliveries.set(data.deliveries);this.reports.set(data.reports);this.loading.set(false);},error:fail});return;}this.api.analytics().subscribe({next:data=>{this.analytics.set(data);this.loading.set(false);this.loadCalendar();},error:fail});}
+  protected load(){this.loading.set(true);this.error.set('');const fail=(e:unknown)=>{this.loading.set(false);this.error.set(apiError(e));};const page=this.page();if(page==='Deadline Extensions'){forkJoin({extensions:this.api.extensions(),dashboard:this.api.getDashboard()}).subscribe({next:data=>{this.extensions.set(data.extensions);this.extensionTasks.set(data.dashboard.upcoming.filter(task=>task.canRecordSending));this.loading.set(false);},error:fail});return;}if(page==='Reminder Settings'){forkJoin({policies:this.api.reminderPolicies(),deliveries:this.api.notificationDeliveries(),reports:this.api.reports()}).subscribe({next:data=>{this.policies.set(data.policies);this.deliveries.set(data.deliveries);this.reports.set(data.reports);this.loading.set(false);},error:fail});return;}this.api.analytics().subscribe({next:data=>{this.analytics.set(data);this.loading.set(false);this.loadCalendar();},error:fail});}
   protected decide(item:ExtensionItem,decision:string,reason:string){if(!reason.trim()){this.error.set('Enter a decision reason.');return;}this.run(this.api.decideExtension(item.id,{decision,reason}),`Extension ${decision.toLowerCase()}.`);}
   protected savePolicy(form:NgForm){if(form.invalid)return;this.run(this.api.createReminderPolicy(this.policy),'Reminder policy saved.',()=>{form.resetForm({...this.policy,name:''});});}
   protected runAutomation(action:'plan'|'dispatch'){this.run(action==='plan'?this.api.planReminders():this.api.dispatchReminders(),action==='plan'?'Reminder jobs planned.':'Due reminders dispatched.');}
