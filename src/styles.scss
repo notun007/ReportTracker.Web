@@ -135,3 +135,27 @@ label.checkbox { display:flex; flex-direction:row; align-items:center; gap:8px; 
 
 .modal.destination-dialog { width:min(1000px,calc(100% - 24px)); max-height:92dvh; }
 .destination-dialog .modal-actions { position:sticky; bottom:0; z-index:1; flex-wrap:wrap; background:#fff; padding:10px 0; }
+
+/* Report setup workspace */
+.report-tabbar { display:flex; flex-wrap:wrap; gap:4px; border-bottom:1px solid var(--line); }
+.report-tabbar button { min-height:42px; padding:8px 16px; background:transparent; border:0; border-bottom:3px solid transparent; color:var(--muted); font-weight:600; }
+.report-tabbar button[aria-selected=true] { color:var(--navy); border-bottom-color:var(--blue); background:#eaf4ff; border-radius:8px 8px 0 0; }
+.report-tabbar button:hover { color:var(--navy); background:#eef5fc; }
+.report-context { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:end; padding:10px 0; }
+.report-context label { display:grid; gap:4px; min-width:0; width:min(420px,100%); font-size:12px; font-weight:600; }
+.report-context select { width:100%; min-width:0; min-height:36px; border:1px solid var(--control-line); border-radius:8px; padding:6px 10px; color:var(--ink); background:#fff; }
+.report-context-meta { padding-bottom:8px; color:var(--muted); font-size:12px; }
+.setup-tab-panel { max-height:max(300px,calc(100dvh - 234px)); overflow:auto; min-width:0; border:1px solid var(--line); border-radius:var(--workspace-radius); background:#fff; box-shadow:var(--panel-shadow); }
+.setup-tab-panel.department-panel { max-height:none; overflow:visible; }
+.setup-tab-panel[hidden] { display:none; }
+.setup-tab-panel .reports-grid { margin:0; border:0; border-radius:0; box-shadow:none; }
+.reports-grid table { min-width:740px; }
+.reports-grid td { height:54px; }
+.reports-grid .current-report { background:#edf6ff; }
+.report-row-actions { display:flex; gap:8px; flex-wrap:wrap; }
+.report-row-actions button { white-space:nowrap; }
+.setup-empty { padding:16px; color:var(--muted); }
+@media(max-width:640px) {
+  .report-tabbar button { padding:7px 10px; font-size:12px; }
+  .setup-tab-panel { max-height:none; overflow:visible; }
+}

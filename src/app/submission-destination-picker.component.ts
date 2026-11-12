@@ -8,7 +8,7 @@ import { SubmissionDestination, SubmissionRecipient } from './dashboard.models';
   styles: [`
     :host { display:contents; }
     .departments,.destination-notice { grid-column:1/-1; min-width:0; }
-    .department-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 16px; max-height:clamp(11rem,42dvh,30rem); overflow:auto; padding:3px; }
+    .department-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 16px; padding:3px; }
     .recipient-controls { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:end; min-width:0; }
     .recipient-controls label { min-width:0; }
     .recipient-controls select { min-width:0; }

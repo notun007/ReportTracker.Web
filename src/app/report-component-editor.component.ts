@@ -1,10 +1,11 @@
-import { Component, OnChanges, SimpleChanges, DestroyRef, inject, input, output, signal } from '@angular/core';
+import { Component, OnChanges, SimpleChanges, DestroyRef, ElementRef, Injector, afterNextRender, inject, input, output, signal, viewChild } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DashboardService, apiError } from './dashboard.service';
 import { Subscription } from 'rxjs';
 import { ComponentDefinition, Lookups, ReportDefinition } from './dashboard.models';
 
+import { ContributorAssignmentTableComponent } from './contributor-assignment-table.component';
 import { ComponentContributorsComponent, ContributorSelection, contributorError, contributorRoleNames, contributorRows, flattenContributors } from './component-contributors.component';
 
 export interface ReportComponentDraft {
@@ -14,11 +15,12 @@ export interface ReportComponentDraft {
 }
 
 @Component({
-  selector:'app-report-component-editor', imports:[FormsModule, ComponentContributorsComponent],
+  selector:'app-report-component-editor', imports:[FormsModule, ComponentContributorsComponent, ContributorAssignmentTableComponent],
   styles:[`
-    :host { display:block; padding:24px; }
+    :host { display:block; padding:18px 22px; }
+    form[hidden] { display:none; }
     header { display:flex; justify-content:space-between; gap:16px; align-items:start; margin-bottom:18px; }
-    h2 { margin:0; font-size:22px; letter-spacing:-.025em; color:#12375f; } p { color:var(--muted); line-height:1.6; }
+    h2 { scroll-margin-top:76px; margin:0; font-size:22px; letter-spacing:-.025em; color:#12375f; } p { color:var(--muted); line-height:1.6; }
     .context { padding:12px; background:var(--surface); border:1px solid var(--line); border-radius:6px; font-size:12px; }
     .context span { display:block; margin-top:4px; }
     form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; align-items:start; }
@@ -29,50 +31,108 @@ export interface ReportComponentDraft {
     input:focus-visible,select:focus-visible,textarea:focus-visible { outline:2px solid #4285c5; outline-offset:2px; }
     input[type=checkbox] { width:16px; min-height:16px; margin:0; }
     .check { display:flex; gap:8px; align-items:center; }
+    .requirements { grid-column:1/-1; display:flex; flex-wrap:wrap; gap:12px 24px; min-width:0; margin:0; padding:12px 14px; border:1px solid var(--line); border-radius:8px; }
+    .requirements legend { padding:0 5px; font-size:14px; font-weight:700; }
     .actions { display:flex; gap:10px; justify-content:flex-end; position:sticky; bottom:-24px; background:white; padding:12px 0; border-top:1px solid var(--line); }
-    .component-grid { margin-top:20px; min-width:0; border:1px solid var(--line); border-radius:var(--workspace-radius); overflow:hidden; box-shadow:var(--panel-shadow); }
+    .header-actions { display:flex; align-items:center; gap:12px; }
+    .view-components { display:inline-flex; align-items:center; min-height:36px; white-space:nowrap; }
+    .component-grid { scroll-margin-top:76px; margin-top:20px; min-width:0; border:1px solid var(--line); border-radius:var(--workspace-radius); overflow:hidden; box-shadow:var(--panel-shadow); }
     .grid-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:14px; background:linear-gradient(180deg,#fff,#f5f9fe); }
     .grid-heading h3 { margin:0; font-size:16px; } .grid-heading p { margin:4px 0 0; font-size:12px; }
+    .contributor-dialog { width:min(1040px,calc(100% - 24px)); height:min(720px,92dvh); max-width:calc(100% - 24px); max-height:92dvh; overflow:hidden; }
+    .contributor-dialog[open] { display:flex; flex-direction:column; }
+    .contributor-dialog .modal-header { align-items:start; flex:none; }
+    .contributor-dialog .editor-body { flex:1; min-height:0; overflow:auto; padding:16px 22px; }
+    .contributor-dialog .editor-footer { flex:none; display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap; padding:12px 22px; border-top:1px solid var(--line); background:#f5f9fe; }
+    .contributor-dialog .editor-body .error-banner { margin:12px 0 0; }
+    @media(max-width:640px) { .contributor-dialog .editor-body,.contributor-dialog .editor-footer { padding-inline:12px; } }
     .component-grid table { min-width:760px; } .component-grid td { vertical-align:top; }
     @media(max-width:640px) { :host { padding:18px; } form { grid-template-columns:minmax(0,1fr); } .actions { bottom:-18px; } }
   `],
   template:`
-    <header><div><h2 id="component-editor-title">{{ component() ? 'Edit component' : 'Add component' }}</h2></div><button type="button" class="icon-button" aria-label="Close component panel" [disabled]="saving()" (click)="cancelled.emit()">×</button></header>
+    <header>
+      <h2 #componentHeading id="component-editor-title" tabindex="-1">{{ embedded() ? 'Components' : component() ? 'Edit component' : 'Add component' }}</h2>
+      <div class="header-actions">
+        @if (creating() || (!embedded() && !component())) {
+          <a class="link-button view-components" [attr.href]="'#' + componentListId()" (click)="viewComponents($event)">View components</a>
+        }
+        @if (embedded() && !creating()) {
+          <button type="button" class="primary" [disabled]="saving() || !!editingContributors()" (click)="creating.set(true)">Add component</button>
+        } @else if (!embedded()) {
+          <button type="button" class="icon-button" aria-label="Close component panel" [disabled]="saving()" (click)="cancelled.emit()">×</button>
+        }
+      </div>
+    </header>
     
     @if (message()) { <div class="success-banner" role="status">{{ message() }}</div> }
-    <form #componentForm="ngForm" (ngSubmit)="save(componentForm)">
+    <form [hidden]="embedded() && !creating()" #componentForm="ngForm" (ngSubmit)="save(componentForm)">
       <fieldset [disabled]="saving()" style="display:contents">
-      <label>Report<select name="componentReport" [(ngModel)]="reportId" (ngModelChange)="reportChanged()" [disabled]="!!component() || saving()"><option value="">New report{{ reportName() ? ' - ' + reportName() : ' (draft)' }}</option>@for (report of reports(); track report.id) { <option [value]="report.id">{{ report.code }} - {{ report.name }}</option> }</select></label>
+      @if (!embedded()) { <label>Report<select name="componentReport" [(ngModel)]="reportId" (ngModelChange)="reportChanged()" [disabled]="!!component() || saving()"><option value="">New report{{ reportName() ? ' - ' + reportName() : ' (draft)' }}</option>@for (report of reports(); track report.id) { <option [value]="report.id">{{ report.code }} - {{ report.name }}</option> }</select></label> }
       <label>Component name<input name="componentName" [(ngModel)]="fields.name" required maxlength="250"></label>
       <label>Preparing division<select name="componentPreparingDivision" [(ngModel)]="fields.providerDivisionId" (ngModelChange)="fields.contributors=[]" required><option value="">Choose preparing division</option>@for (division of lookups().divisions; track division.id) { <option [value]="division.id">{{ division.name }}</option> }</select></label>
       <label>Description<textarea name="componentDescription" [(ngModel)]="fields.description" rows="2" maxlength="1000"></textarea></label>
       <label>Display order (optional)<input type="number" name="componentOrder" [(ngModel)]="fields.sequence" placeholder="0" min="0" max="10000" step="1"></label>
-      <app-component-contributors [rows]="fields.contributors" [members]="teamMembers(fields.providerDivisionId)" [disabled]="saving()" (rowsChange)="fields.contributors=$event" />
-      <label class="check"><input type="checkbox" name="componentRequired" [(ngModel)]="fields.isRequired">Mandatory component</label>
-      <label class="check"><input type="checkbox" name="componentReceipt" [(ngModel)]="fields.receiptRequired">Receipt confirmation required</label>
-      <label class="check"><input type="checkbox" name="componentEvidence" [(ngModel)]="fields.evidenceRequired">Confirmation evidence required</label>
-      </fieldset>@if ((!reportId && error()) || validationError()) { <div class="error-banner form-error" role="alert">{{ (!reportId && error()) || validationError() }}</div> }<div class="actions"><button class="secondary" type="button" [disabled]="saving()" (click)="cancelled.emit()">Cancel</button><button class="primary" type="submit" [disabled]="saving() || loadingComponents()">{{ saving() ? 'Creating...' : component() ? 'Update component' : reportId ? 'Create component' : 'Add to report' }}</button></div>
+      <app-component-contributors [automaticRows]="true" [rows]="fields.contributors" [members]="teamMembers(fields.providerDivisionId)" [disabled]="saving()" (rowsChange)="fields.contributors=$event" />
+      <fieldset class="requirements">
+        <legend>Requirements</legend>
+        <label class="check"><input type="checkbox" name="componentRequired" [(ngModel)]="fields.isRequired">Mandatory component</label>
+        <label class="check"><input type="checkbox" name="componentReceipt" [(ngModel)]="fields.receiptRequired">Receipt confirmation required</label>
+        <label class="check"><input type="checkbox" name="componentEvidence" [(ngModel)]="fields.evidenceRequired">Confirmation evidence required</label>
+      </fieldset>
+      </fieldset>@if ((!reportId && error()) || validationError()) { <div class="error-banner form-error" role="alert">{{ (!reportId && error()) || validationError() }}</div> }<div class="actions"><button class="secondary" type="button" [disabled]="saving()" (click)="cancelCreate()">Cancel</button><button class="primary" type="submit" [disabled]="saving() || loadingComponents()">{{ saving() ? 'Creating...' : component() ? 'Update component' : reportId ? 'Create component' : 'Add to report' }}</button></div>
     </form>
-    @if (editingContributors(); as row) {
-      <section class="component-grid">
-        <div class="grid-heading"><h3>{{ row.name }}</h3></div>
-        <app-component-contributors [rows]="contributorDraft()" [members]="teamMembers(row.providerDivisionId)" [disabled]="saving()" (rowsChange)="contributorDraft.set($event)" />
-        @if (contributorSaveError()) { <div class="error-banner" role="alert">{{ contributorSaveError() }}</div> }
-        <div class="actions"><button type="button" class="secondary" [disabled]="saving()" (click)="editingContributors.set(null)">Cancel</button><button type="button" class="primary" [disabled]="saving()" (click)="saveContributors()">Save contributors</button></div>
-      </section>
-    }
-    <section class="component-grid" aria-label="Report components">
-      <div class="grid-heading"><div><h3>Components ({{ gridRows().length }})</h3><p>{{ selectedReport() ? selectedReport()!.code + ' - ' + selectedReport()!.name : reportName() || 'New report' }}</p></div><button class="secondary" type="button" (click)="loadComponents()" [disabled]="!reportId || loadingComponents() || saving()">Refresh</button></div>
+    <section class="component-grid" [id]="componentListId()" tabindex="-1" aria-label="Report components">
+      <div class="grid-heading"><div><h3>Components ({{ gridRows().length }})</h3><p>{{ selectedReport() ? selectedReport()!.code + ' - ' + selectedReport()!.name : reportName() || 'New report' }}</p></div><button class="secondary" type="button" (click)="loadComponents()" [disabled]="!reportId || loadingComponents() || saving() || !!editingContributors()">Refresh</button></div>
       @if (loadError()) { <div class="error-banner" role="alert">{{ loadError() }} <button type="button" (click)="loadComponents()">Retry</button></div> }
       <div class="table-wrap" tabindex="0" aria-label="Components grid"><table><thead><tr><th>Component</th><th>Preparing division</th><th>Component contributors</th><th>Actions</th><th>Order</th><th>Requirements</th></tr></thead><tbody>
-        @for (row of gridRows(); track row.id) { <tr><td><strong>{{ row.name }}</strong><span>{{ row.description }}</span></td><td>{{ divisionName(row.providerDivisionId) }}</td><td>@for (member of membersFor(row); track member.userId) { <span>{{ teamMemberName(member.userId) }} · {{ contributorRoleNames(member) }}</span> } @empty { Unassigned }</td><td>@if (reportId) { <button type="button" class="link-button" [disabled]="saving()" (click)="editContributors(row)" [attr.aria-label]="'Edit contributors for '+row.name">Edit contributors</button> }</td><td>{{ row.sequence }}</td><td>{{ row.isRequired ? 'Mandatory' : 'Optional' }}<span>{{ row.receiptRequired ? 'Receipt required' : 'No receipt confirmation' }}</span><span>{{ row.evidenceRequired ? 'Evidence required' : 'No evidence required' }}</span></td></tr> }
+        @for (row of gridRows(); track row.id) { <tr><td><strong>{{ row.name }}</strong><span>{{ row.description }}</span></td><td>{{ divisionName(row.providerDivisionId) }}</td><td>@for (member of membersFor(row); track member.userId) { <span>{{ teamMemberName(member.userId) }} · {{ contributorRoleNames(member) }}</span> } @empty { Unassigned }</td><td>@if (reportId) { <button type="button" class="link-button" [disabled]="saving() || creating() || (!!editingContributors() && editingContributors()?.id !== row.id)" (click)="editContributors(row)"
+          aria-haspopup="dialog"
+          [attr.data-contributor-action]="row.id" [attr.aria-label]="'Edit contributors for '+row.name">Edit contributors</button> }</td><td>{{ row.sequence }}</td><td>{{ row.isRequired ? 'Mandatory' : 'Optional' }}<span>{{ row.receiptRequired ? 'Receipt required' : 'No receipt confirmation' }}</span><span>{{ row.evidenceRequired ? 'Evidence required' : 'No evidence required' }}</span></td></tr>
+        }
         @empty { <tr><td colspan="6" class="empty">{{ loadingComponents() ? 'Loading components...' : loadError() ? 'Components could not be loaded.' : 'No components added to this report.' }}</td></tr> }
       </tbody></table></div>
     </section>
+    <dialog #contributorDialog class="modal contributor-dialog" aria-label="Edit contributors" (cancel)="closeContributorEditor($event)">
+      @if (editingContributors(); as row) {
+        <header class="modal-header">
+          <div><h2>Edit contributors</h2><p>{{ row.name }}</p></div>
+          <button type="button" class="icon-button" aria-label="Close contributor editor" [disabled]="saving()" (click)="closeContributorEditor()" autofocus>×</button>
+        </header>
+        <div class="editor-body">
+          <app-contributor-assignment-table #assignment [rows]="contributorDraft()" [members]="teamMembers(row.providerDivisionId)" [disabled]="saving()" (rowsChange)="contributorDraft.set($event); contributorSaveError.set('')" />
+          @if (contributorSaveError()) { <div class="error-banner" role="alert">{{ contributorSaveError() }}</div> }
+        </div>
+        <footer class="editor-footer">
+          <button type="button" class="secondary" [disabled]="saving()" (click)="closeContributorEditor()">Cancel</button>
+          <button type="button" class="primary" [disabled]="saving() || assignment.hasPendingEntry()" (click)="saveContributors()">{{ saving() ? 'Saving…' : 'Save contributors' }}</button>
+        </footer>
+      }
+    </dialog>
   `
 })
 export class ReportComponentEditorComponent implements OnChanges {
   private readonly api=inject(DashboardService); private readonly destroyRef=inject(DestroyRef);
+  private readonly contributorDialog=viewChild<ElementRef<HTMLDialogElement>>('contributorDialog');
+  private readonly host=inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector=inject(Injector);
+  readonly embedded=input(false);
+  protected readonly creating=signal(false);
+  protected componentListId() { return this.embedded() ? 'report-component-list' : 'component-editor-list'; }
+  private readonly componentHeading = viewChild<ElementRef<HTMLHeadingElement>>('componentHeading');
+
+  protected viewComponents(event: MouseEvent) {
+    if (!this.embedded() || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (this.saving()) return;
+    this.creating.set(false);
+    afterNextRender(() => {
+      const heading = this.componentHeading()?.nativeElement;
+      heading?.focus({ preventScroll: true });
+      heading?.scrollIntoView({ block: 'nearest' });
+    }, { injector: this.injector });
+  }
+  isSaving() { return this.saving(); }
+  protected cancelCreate() { if(this.embedded()) this.creating.set(false); else this.cancelled.emit(); }
   readonly initialReportId=input(''); readonly reports=input<ReportDefinition[]>([]); readonly drafts=input<ReportComponentDraft[]>([]); readonly draftReceivingDivisionId=input('');
   readonly lookups=input.required<Lookups>(); readonly reportName=input('');
   readonly component=input<ReportComponentDraft|null>(null); readonly defaultLeadDays=input(1); readonly sessionKey=input(0); readonly error=input('');
@@ -84,7 +144,7 @@ export class ReportComponentEditorComponent implements OnChanges {
   ngOnChanges(changes:SimpleChanges) {
     if (changes['component'] || changes['sessionKey'] || changes['initialReportId']) {
       this.fields=this.component() ? {...this.component()!} : {...this.empty(),deadlineOffsetDays:this.defaultLeadDays()};
-      this.validationError.set('');this.message.set('');this.editingContributors.set(null);this.reportId=this.component() ? '' : this.reports().find(report=>report.id===this.initialReportId())?.id ?? this.reports()[0]?.id ?? '';this.loadComponents();
+      this.validationError.set('');this.message.set('');this.editingContributors.set(null);this.creating.set(false);this.reportId=this.component() ? '' : this.reports().find(report=>report.id===this.initialReportId())?.id ?? this.reports()[0]?.id ?? '';this.loadComponents();
     } else if (changes['reports'] && !this.reportId && !this.component()) { this.reportId=this.reports()[0]?.id ?? '';this.loadComponents(); }
   }
   protected loadComponents() {
@@ -105,8 +165,22 @@ export class ReportComponentEditorComponent implements OnChanges {
   protected readonly contributorSaveError=signal('');
   protected membersFor(row:ComponentDefinition|ReportComponentDraft){return 'id' in row && 'primaryOfficerId' in row ? contributorRows(row) : row.contributors ?? [];}
   protected editContributors(row:ComponentDefinition|ReportComponentDraft){
-    if (!('id' in row)) return;
+    if (!('id' in row) || this.saving()) return;
     this.contributorDraft.set(contributorRows(row));this.contributorSaveError.set('');this.editingContributors.set(row);
+    afterNextRender(() => {
+      const dialog=this.contributorDialog()?.nativeElement;
+      if(dialog && !dialog.open && this.editingContributors()?.id===row.id) dialog.showModal();
+    }, {injector:this.injector});
+  }
+  protected closeContributorEditor(event?:Event) {
+    event?.preventDefault();
+    if(this.saving()) return;
+    this.contributorDialog()?.nativeElement.close();
+    const id=this.editingContributors()?.id;
+    this.editingContributors.set(null);
+    this.contributorDraft.set([]);
+    this.contributorSaveError.set('');
+    if(id) afterNextRender(() => this.host.nativeElement.querySelector<HTMLButtonElement>('[data-contributor-action="'+CSS.escape(id)+'"]')?.focus(), {injector:this.injector});
   }
   protected saveContributors(){
     const row=this.editingContributors(),draft=this.contributorDraft();
@@ -115,7 +189,7 @@ export class ReportComponentEditorComponent implements OnChanges {
     if(error){this.contributorSaveError.set(error);return;}
     this.saving.set(true);this.contributorSaveError.set('');this.message.set('');
     this.api.setComponentContributors(this.reportId,row.id,flattenContributors(draft)).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next:saved=>{this.rows.update(rows=>rows.map(item=>item.id===saved.id?saved:item));this.editingContributors.set(null);this.saving.set(false);this.message.set('Component contributors saved for future cycles.');},
+      next:saved=>{this.rows.update(rows=>rows.map(item=>item.id===saved.id?saved:item));this.saving.set(false);this.closeContributorEditor();this.message.set('Component contributors saved for future cycles.');},
       error:error=>{this.contributorSaveError.set(apiError(error));this.saving.set(false);}
     });
   }
@@ -147,7 +221,7 @@ export class ReportComponentEditorComponent implements OnChanges {
     this.api.createComponent(this.reportId,{...body,contributors:flattenContributors(body.contributors),receivingDivisionId:this.receiver()}).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next:row=>{this.rows.update(rows=>[...rows,row].sort((a,b)=>a.sequence-b.sequence));this.fields=this.empty();form.resetForm({componentReport:this.reportId,
         componentName:'',componentDescription:'',componentPreparingDivision:'',
-        componentOrder:0,componentRequired:true,componentReceipt:false,componentEvidence:false});this.message.set('Component created. You can add another component to this report. Existing reporting cycles are unchanged.');this.saving.set(false);},
+        componentOrder:0,componentRequired:true,componentReceipt:false,componentEvidence:false});this.message.set('Component created.');this.creating.set(false);this.saving.set(false);},
       error:error=>{this.validationError.set(apiError(error));this.saving.set(false);}
     });
   }

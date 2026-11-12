@@ -1,10 +1,8 @@
-import { Component, input, output, signal } from '@angular/core';
+import { Component, computed, input, output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ComponentContributor, ComponentDefinition, ContributorRole, Lookup } from './dashboard.models';
 
-export const contributorRoles: Record<ContributorRole, string> = {
-  LeadPreparer: 'Lead preparer', Preparer: 'Preparer', BackupPreparer: 'Backup preparer', Reviewer: 'Reviewer'
-};
+import { ContributorRolePickerComponent, formatContributorRoles } from './contributor-role-picker.component';
 
 export interface ContributorSelection {
   userId: string;
@@ -33,7 +31,7 @@ export function contributorRows(row: ComponentDefinition): ContributorSelection[
 }
 
 export function contributorRoleNames(row: ContributorSelection): string {
-  return row.roles.map(role => contributorRoles[role]).join(', ');
+  return formatContributorRoles(row.roles);
 }
 
 export function contributorError(rows: ContributorSelection[], members: Lookup[]): string {
@@ -48,7 +46,7 @@ export function contributorError(rows: ContributorSelection[], members: Lookup[]
 
 @Component({
   selector: 'app-component-contributors',
-  imports: [FormsModule],
+  imports: [FormsModule, ContributorRolePickerComponent],
   styles: [`
     :host { display:block; grid-column:1/-1; min-width:0; }
     fieldset { display:grid; gap:12px; min-width:0; margin:0; padding:14px; border:1px solid var(--line); border-radius:8px; }
@@ -57,61 +55,37 @@ export function contributorError(rows: ContributorSelection[], members: Lookup[]
     label { display:grid; gap:5px; min-width:0; font-size:12px; font-weight:600; }
     select { width:100%; min-width:0; min-height:40px; padding:8px; border:1px solid var(--control-line); border-radius:8px; background:var(--control-fill); color:var(--ink); }
     .remove { justify-self:end; min-height:40px; }
-    .roles { display:grid; gap:5px; min-width:0; }
-    .roles-title { font-size:12px; font-weight:600; }
-    .role-trigger { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:40px; min-width:0; padding:7px 9px; border:1px solid var(--control-line); border-radius:8px; background:var(--control-fill); color:var(--ink); text-align:left; font-size:12px; }
-    .role-values { display:flex; flex-wrap:wrap; gap:4px; min-width:0; }
-    .role-chip { border-radius:5px; padding:3px 6px; background:#e6f1ff; color:#174772; }
-    .role-placeholder { color:var(--muted); }
-    .role-menu { display:grid; gap:3px; border:1px solid var(--line); border-radius:8px; background:#fff; padding:6px; }
-    .role-menu .role-option { display:flex; flex-direction:row; align-items:center; gap:8px; padding:6px; cursor:pointer; }
-    .role-option input { flex:none; width:16px; height:16px; min-height:16px; margin:0; accent-color:var(--blue); }
-    .role-option:hover { background:#eef5fe; border-radius:5px; }
-    .role-done { justify-self:end; }
     .handover { grid-column:1/-1; }
     .add { justify-self:start; }
+    .automatic .contributor-row { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 16px; }
+    .automatic .contributor-row:last-child { border-bottom:0; padding-bottom:0; }
+    .automatic .handover { grid-column:1; grid-row:2; display:flex; align-items:center; gap:8px; }
+    .automatic .handover input { width:16px; height:16px; min-height:16px; margin:0; padding:0; accent-color:var(--blue); }
+    .automatic .remove { grid-column:2; grid-row:2; min-height:30px; }
+    @media(max-width:480px) {
+      .automatic .contributor-row { grid-template-columns:minmax(0,1fr); }
+      .automatic .handover,.automatic .remove { grid-column:1; grid-row:auto; }
+    }
     @media(max-width:560px) { .contributor-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr); } .remove { grid-column:1/-1; grid-row:auto; min-height:30px; } }
   `],
   template: `
-    <fieldset [disabled]="disabled()">
+    <fieldset [disabled]="disabled()" [class.automatic]="automaticRows()">
       <legend>Component contributors</legend>
-      @for (row of rows(); track $index; let i = $index) {
+      @for (row of displayedRows(); track $index; let i = $index) {
         <div class="contributor-row">
           <label>Team member
-            <select [ngModel]="row.userId" [ngModelOptions]="{standalone:true}" (ngModelChange)="update(i,{userId:$event})">
-              <option value="">Choose team member</option>
+            <select [ngModel]="row.userId" [ngModelOptions]="{standalone:true}" (ngModelChange)="selectMember(i,$event)">
+              <option value="">{{ automaticRows() && !members().length ? 'No team members available' : 'Choose team member' }}</option>
               @if (row.userId && !hasMember(row.userId)) { <option [value]="row.userId" disabled>Unavailable team member</option> }
               @for (member of members(); track member.id) { <option [value]="member.id" [disabled]="usedByAnother(member.id,i)">{{ member.name }}</option> }
             </select>
           </label>
-          <div class="roles" (focusout)="closeIfFocusLeaves(i,$event)" (keydown.escape)="closeRoleMenu(i,$event,roleTrigger)">
-            <span class="roles-title">Contributor roles</span>
-            <button #roleTrigger type="button" class="role-trigger" aria-label="Contributor roles" [attr.aria-expanded]="openRoleIndex()===i"
-              (click)="openRoleIndex.set(openRoleIndex()===i ? null : i)">
-              <span class="role-values">
-                @for (role of row.roles; track role) { <span class="role-chip">{{ roleLabels[role] }}</span> }
-                @empty { <span class="role-placeholder">Choose roles</span> }
-              </span>
-              <span aria-hidden="true">▾</span>
-            </button>
-            @if (openRoleIndex()===i) {
-              <div class="role-menu" role="group" aria-label="Choose contributor roles">
-                @for (role of roles; track role) {
-                  <label class="checkbox role-option">
-                    <input type="checkbox" [checked]="row.roles.includes(role)"
-                      (change)="toggleRole(i,role,$any($event.target).checked)">
-                    {{ roleLabels[role] }}
-                  </label>
-                }
-                <button class="link-button role-done" type="button" (click)="openRoleIndex.set(null); roleTrigger.focus()">Done</button>
-              </div>
-            }
-          </div>
-          <button class="link-button remove" type="button" (click)="remove(i)" [attr.aria-label]="'Remove contributor '+(i+1)">Remove</button>
-          <label class="checkbox handover"><input type="checkbox" [checked]="row.recordsHandover" (change)="update(i,{recordsHandover:$any($event.target).checked})">Records handover</label>
+          <app-contributor-role-picker [roles]="row.roles" [disabled]="automaticRows() && !row.userId" (rolesChange)="update(i,{roles:$event})" />
+          @if (!automaticRows() || row.userId) { <button class="link-button remove" type="button" (click)="remove(i)" [attr.aria-label]="'Remove contributor '+(i+1)">Remove</button> }
+          <label class="checkbox handover"><input type="checkbox" [checked]="row.recordsHandover" [disabled]="automaticRows() && !row.userId" (change)="update(i,{recordsHandover:$any($event.target).checked})">Records handover</label>
         </div>
       }
-      <button class="secondary add" type="button" (click)="add()" [disabled]="rows().length >= 50 || rows().length >= members().length">Add contributor</button>
+      @if (!automaticRows()) { <button class="secondary add" type="button" (click)="add()" [disabled]="rows().length >= 50 || rows().length >= members().length">Add contributor</button> }
     </fieldset>
   `
 })
@@ -119,31 +93,35 @@ export class ComponentContributorsComponent {
   readonly rows = input.required<ContributorSelection[]>();
   readonly members = input.required<Lookup[]>();
   readonly disabled = input(false);
+  readonly automaticRows = input(false);
+  protected readonly displayedRows = computed(() => {
+    const rows = this.rows();
+    return this.automaticRows() && (!rows.length || (rows.length < 50 && rows.length < this.members().length))
+      ? [...rows, this.blankRow()]
+      : rows;
+  });
   readonly rowsChange = output<ContributorSelection[]>();
-  protected readonly openRoleIndex = signal<number|null>(null);
-  protected readonly roleLabels = contributorRoles;
-  protected readonly roles = Object.keys(contributorRoles) as ContributorRole[];
   protected hasMember(id:string) { return this.members().some(member=>member.id===id); }
   protected usedByAnother(id:string,index:number) { return this.rows().some((row,i)=>i!==index && row.userId===id); }
-  protected add() {
+  protected selectMember(index: number, userId: string) {
+    if (!this.automaticRows()) {
+      this.update(index, { userId });
+    } else if (!userId) {
+      this.remove(index);
+    } else if (index === this.rows().length) {
+      this.rowsChange.emit([...this.rows(), { ...this.blankRow(), userId }]);
+    } else {
+      this.update(index, { userId });
+    }
+  }
+  private blankRow(): ContributorSelection {
     const first = !this.rows().length;
-    this.rowsChange.emit([...this.rows(), {userId:'',roles:[first ? 'LeadPreparer' : 'Preparer'], recordsHandover:first}]);
+    return { userId: '', roles: [first ? 'LeadPreparer' : 'Preparer'], recordsHandover: first };
   }
-  protected remove(index:number) { this.openRoleIndex.set(null); this.rowsChange.emit(this.rows().filter((_,i)=>i!==index)); }
-  protected closeIfFocusLeaves(index:number,event:FocusEvent) {
-    const next = event.relatedTarget;
-    if (this.openRoleIndex()===index && !(next instanceof Node && (event.currentTarget as HTMLElement).contains(next)))
-      this.openRoleIndex.set(null);
+  protected add() {
+    this.rowsChange.emit([...this.rows(), this.blankRow()]);
   }
-  protected closeRoleMenu(index:number,event:Event,trigger:HTMLButtonElement) {
-    if (this.openRoleIndex()!==index) return;
-    event.preventDefault(); event.stopPropagation();
-    this.openRoleIndex.set(null); trigger.focus();
-  }
-  protected toggleRole(index:number,role:ContributorRole,checked:boolean) {
-    const roles = this.rows()[index].roles;
-    this.update(index,{roles:checked ? [...new Set([...roles,role])] : roles.filter(item=>item!==role)});
-  }
+  protected remove(index:number) { this.rowsChange.emit(this.rows().filter((_,i)=>i!==index)); }
   protected update(index:number,change:Partial<ContributorSelection>) {
     this.rowsChange.emit(this.rows().map((row,i)=>i===index ? {...row,...change} : row));
   }

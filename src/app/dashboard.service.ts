@@ -38,11 +38,7 @@ export class DashboardService {
   submissionRecipients() { return this.http.get<SubmissionRecipient[]>('/api/setup/submission-recipients'); }
   createSubmissionRecipient(name: string) { return this.http.post<Lookup>('/api/setup/submission-recipients', {name}); }
   createSubmissionDepartment(recipientId: string, name: string) { return this.http.post<Lookup>(`/api/setup/submission-recipients/${recipientId}/departments`, {name}); }
-  createSubmissionDepartments(recipientId: string, names: string[]) {
-    return this.http.post<Lookup[]>(`/api/setup/submission-recipients/${recipientId}/departments/batch`, {names});
-  }
-  setSubmissionDestination(reportId: string, destination: SubmissionDestination) { return this.http.put<void>(`/api/setup/reports/${reportId}/submission-destination`, destination); }
-  createReport(body: unknown) { return this.http.post('/api/setup/reports', body); }
+  createReport(body: unknown) { return this.http.post<{id:string}>('/api/setup/reports', body); }
   setReportResponsibilities(id:string,body:unknown) { return this.http.put<void>(`/api/setup/reports/${id}/responsibilities`,body); }
   cycles(id: string) { return this.http.get<ReportingCycle[]>(`/api/setup/reports/${id}/cycles`); }
   createCycle(id: string, body: unknown) { return this.http.post(`/api/setup/reports/${id}/cycles`, body); }
