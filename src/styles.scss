@@ -132,3 +132,6 @@ label.checkbox { display:flex; flex-direction:row; align-items:center; gap:8px; 
 .report-drawer-heading .icon-button:hover:not(:disabled) { background:#e1effe; }
 
 .report-drawer,.component-drawer { box-shadow:-20px 0 64px #071f4138; }
+
+.modal.destination-dialog { width:min(1000px,calc(100% - 24px)); max-height:92dvh; }
+.destination-dialog .modal-actions { position:sticky; bottom:0; z-index:1; flex-wrap:wrap; background:#fff; padding:10px 0; }

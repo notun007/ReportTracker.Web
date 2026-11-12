@@ -1,7 +1,7 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { catchError, switchMap, tap, throwError } from 'rxjs';
-import { Lookup, SubmissionDestination, SubmissionRecipient, ObligationActions, ReceiptItem, ReportingCycle, DashboardSummary, SendingRecord, SendingHistory, SessionResponse, SessionUser, Lookups, ReportDefinition, UserItem, ComponentDefinition, SubmissionReadiness, EvidenceItem, ExtensionItem, ReminderPolicy, NotificationItem, CalendarItem, ManagementAnalytics } from './dashboard.models';
+import { ComponentContributor, Lookup, SubmissionDestination, SubmissionRecipient, ObligationActions, ReceiptItem, ReportingCycle, DashboardSummary, SendingRecord, SendingHistory, SessionResponse, SessionUser, Lookups, ReportDefinition, UserItem, ComponentDefinition, SubmissionReadiness, EvidenceItem, ExtensionItem, ReminderPolicy, NotificationItem, CalendarItem, ManagementAnalytics } from './dashboard.models';
 
 export function apiError(error: unknown): string {
   if (error instanceof HttpErrorResponse) {
@@ -51,6 +51,9 @@ export class DashboardService {
   createDivision(body: unknown) { return this.http.post('/api/setup/divisions', body); }
   components(reportId: string) { return this.http.get<ComponentDefinition[]>(`/api/report-definitions/${reportId}/components`); }
   createComponent(reportId: string, body: unknown) { return this.http.post<ComponentDefinition>(`/api/report-definitions/${reportId}/components`, body); }
+  setComponentContributors(reportId: string, componentId: string, contributors: ComponentContributor[]) {
+    return this.http.put<ComponentDefinition>(`/api/report-definitions/${reportId}/components/${componentId}/contributors`, {contributors});
+  }
   readiness(cycleId: string) { return this.http.get<SubmissionReadiness>(`/api/report-cycles/${cycleId}/readiness`); }
   obligationActions(id:string) { return this.http.get<ObligationActions>(`/api/obligations/${id}/actions`); }
   receipts(id:string) { return this.http.get<ReceiptItem[]>(`/api/obligations/${id}/receipts`); }

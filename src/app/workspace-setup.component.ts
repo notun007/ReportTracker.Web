@@ -1,3 +1,4 @@
+import { flattenContributors } from './component-contributors.component';
 import { Component, OnInit, OnDestroy, ElementRef, inject, input, output, signal, viewChild } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { forkJoin, Observable, of, Subscription, switchMap } from 'rxjs';
@@ -89,14 +90,14 @@ import { ReportComponentDraft, ReportComponentEditorComponent } from './report-c
         </article>
     </dialog>
     <dialog #reportDrawer class="report-drawer" aria-labelledby="report-editor-title" (cancel)="closeReportPanel($event)">
-        <article class="setup-card report-editor"><header class="report-drawer-heading"><h2 id="report-editor-title">Create report</h2><button class="icon-button" type="button" aria-label="Close report panel" [disabled]="busy()" (click)="closeReportPanel()">×</button></header>@if (error()) { <div class="error-banner" role="alert">{{ error() }}</div> }<form #reportForm="ngForm" (ngSubmit)="addReport(reportForm)">
+        <article class="setup-card report-editor"><header class="report-drawer-heading"><h2 id="report-editor-title">Create report</h2><button class="icon-button" type="button" aria-label="Close report panel" [disabled]="busy()" (click)="closeReportPanel()">×</button></header><form #reportForm="ngForm" (ngSubmit)="addReport(reportForm)">
           <label>Code<input name="code" [(ngModel)]="report.code" required maxlength="40"></label>
           <label>Report name<input name="name" [(ngModel)]="report.name" required maxlength="150"></label>
           <label>Coordinating division<select name="ownerDivisionId" [(ngModel)]="report.ownerDivisionId" required><option value="">Choose division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
           <label>Receiving division<select name="reportReceivingDivision" [(ngModel)]="report.receivingDivisionId" required><option value="">Choose receiving division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
           <label>Final submitting division<select name="submittingDivisionId" [(ngModel)]="report.submittingDivisionId" (ngModelChange)="report.primarySubmittingOfficerId = ''; report.deputySubmittingOfficerId = ''" required><option value="">Choose final submitting division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
-          <label>Final submitting officer<select name="primarySubmittingOfficerId" [(ngModel)]="report.primarySubmittingOfficerId" required><option value="">Choose officer</option>@for (u of officers(report.submittingDivisionId); track u.id) { <option [value]="u.id">{{ u.name }}</option> }</select></label>
-          <label>Deputy submitting officer (optional)<select name="deputySubmittingOfficerId" [(ngModel)]="report.deputySubmittingOfficerId"><option value="">None</option>@for (u of officers(report.submittingDivisionId); track u.id) { <option [value]="u.id">{{ u.name }}</option> }</select></label>
+          <label>Final submitting officer<select name="primarySubmittingOfficerId" [ngModel]="report.primarySubmittingOfficerId" (ngModelChange)="selectFinalSubmitter($event)" required><option value="">Choose officer</option>@for (u of officers(report.submittingDivisionId); track u.id) { <option [value]="u.id">{{ u.name }}</option> }</select></label>
+          <label>Deputy submitting officer (optional)<select name="deputySubmittingOfficerId" [(ngModel)]="report.deputySubmittingOfficerId"><option value="">None</option>@for (u of deputySubmitters(); track u.id) { <option [value]="u.id">{{ u.name }}</option> }</select></label>
           <app-submission-destination-picker [recipients]="submissionRecipients()" [destination]="report" [disabled]="busy()" (destinationChange)="updateReportDestination($event)" />
           @if (canAddDepartments() && report.submissionRecipientId) {
             <div class="report-description">
@@ -119,10 +120,11 @@ import { ReportComponentDraft, ReportComponentEditorComponent } from './report-c
           <label>Deadline lead days<input name="componentDeadlineOffsetDays" type="number" min="0" max="365" [(ngModel)]="report.componentDeadlineOffsetDays" required></label>
           <label>Instruction reference<input name="instructionReference" [(ngModel)]="report.instructionReference" maxlength="250"></label>
           <label class="report-description">Description<textarea name="description" [(ngModel)]="report.description" maxlength="1000" rows="2"></textarea></label>
+          @if (error()) { <div class="error-banner report-description" role="alert">{{ error() }}</div> }
           <div class="report-drawer-actions"><button class="secondary" type="button" [disabled]="busy()" (click)="closeReportPanel()">Cancel</button><button class="primary" type="submit" [disabled]="busy() || reportForm.invalid || showDepartmentEntry || !validDestination(report)">{{ busy() ? 'Saving…' : 'Create report' }}</button></div>
         </form></article>
     </dialog>
-    <dialog #destinationDialog class="modal" aria-labelledby="destination-editor-title" (cancel)="closeDestinationPanel($event)">
+    <dialog #destinationDialog class="modal destination-dialog" aria-labelledby="destination-editor-title" (cancel)="closeDestinationPanel($event)">
       @if (destinationReport(); as selectedReport) {
         <header class="modal-header"><div><h2 id="destination-editor-title">Submission destination</h2><p>{{ selectedReport.code }} — {{ selectedReport.name }}</p></div><button class="icon-button" type="button" aria-label="Close submission destination" [disabled]="busy()" (click)="closeDestinationPanel()">×</button></header>
         @if (error()) { <div class="error-banner" role="alert">{{ error() }}</div> }
@@ -318,7 +320,7 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
   }
   protected closeDestinationPanel(event?: Event) {
     event?.preventDefault();
-    if (!this.busy()) this.destinationDialog()?.nativeElement.close();
+    if (!this.busy()) { this.destinationDialog()?.nativeElement.close(); this.destinationReport.set(null); }
   }
   protected changeDestinationDraft(destination: SubmissionDestination) {
     this.destinationSaved.set(false); this.error.set(''); this.destinationDraft.set(destination);
@@ -346,9 +348,20 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
       error: error => { this.busy.set(false); this.error.set(apiError(error)); }
     });
   }
+  protected selectFinalSubmitter(id: string) {
+    this.report.primarySubmittingOfficerId = id;
+    if (this.report.deputySubmittingOfficerId === id) this.report.deputySubmittingOfficerId = '';
+  }
+  protected deputySubmitters() {
+    return this.officers(this.report.submittingDivisionId).filter(person => person.id !== this.report.primarySubmittingOfficerId);
+  }
   protected addReport(form: NgForm) {
     if (form.invalid || this.showDepartmentEntry || !this.validDestination(this.report) || this.busy() || this.componentDrawer()?.nativeElement.open) return;
-    const components = this.reportComponents().map(({clientId,...component}) => ({...component,deputyOfficerId:component.deputyOfficerId || null}));
+    if (this.report.primarySubmittingOfficerId === this.report.deputySubmittingOfficerId) {
+      this.error.set('Choose a different deputy submitting officer or select None.');
+      return;
+    }
+    const components = this.reportComponents().map(({clientId,...component}) => ({...component, contributors:flattenContributors(component.contributors)}));
     const dueTime = this.report.dueTime.length === 5 ? this.report.dueTime + ':00' : this.report.dueTime;
     this.save(this.api.createReport({...this.report,dueTime,components,deputySubmittingOfficerId:this.report.deputySubmittingOfficerId || null}), 'Report and components created.', () => { this.closeReportPanel(); this.report=this.emptyReport(); this.reportComponents.set([]); form.resetForm(this.report); });
   }
