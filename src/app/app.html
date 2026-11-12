@@ -17,14 +17,14 @@
     <nav aria-label="Primary navigation">@for (item of navigation(); track item) {
       <button [class.active]="view() === item" type="button" (click)="navigate(item)" [attr.title]="item"><span class="nav-icon" aria-hidden="true">{{ navIcon(item) }}</span><span class="nav-label">{{ item }}</span></button>
     }</nav>
-    @if (canAdmin()) { <button class="admin-link" [class.active]="view() === 'Administration'" type="button" (click)="navigate('Administration')"><span class="nav-icon">⚙</span><span class="nav-label">Administration</span></button> }
+    @if (canAdmin()) { <button class="admin-link" [class.active]="view() === 'Administration'" type="button" (click)="navigate('Administration')" aria-label="Administration"><span class="nav-icon" aria-hidden="true">⚙</span><span class="nav-label">Administration</span></button> }
   </aside>
   <main>
     <header class="topbar"><div class="topbar-left"><button class="icon-button menu" type="button" (click)="navCollapsed.set(!navCollapsed())" aria-label="Toggle navigation">☰</button><div><h1>{{ view() }}</h1>@if (view() === 'Reporting Overview') { <span>Track regulatory components, deadlines, readiness and submissions</span> }</div></div><div class="topbar-actions"><label class="global-search"><span aria-hidden="true">⌕</span><input [ngModel]="search()" (ngModelChange)="search.set($event)" placeholder="Search reports, components, officers…" aria-label="Search"></label><button class="notification icon-button" aria-label="Notifications">♢<b>{{ dashboard()?.overdue ?? 0 }}</b></button><span class="avatar">{{ (session.user()?.displayName || 'U').slice(0,2).toUpperCase() }}</span><span class="user-name"><strong>{{ session.user()?.displayName }}</strong><small>Authorized user</small></span><button class="link-button" type="button" (click)="logout()">Sign out</button></div></header>
     <div class="content">
       @if (error()) { <div class="error-banner" role="alert">{{ error() }} <button type="button" (click)="reload()">Retry</button></div> }
-      @if (view() === 'Report Configuration') { @defer (on immediate) { <app-workspace-setup mode="Report Configuration" (changed)="reload()" /> } @loading { <p role="status" class="loading-inline">Loading report configuration…</p> } }
-      @else if (view() === 'Administration') { @defer (on immediate) { <app-workspace-setup mode="Administration" (changed)="reload()" /> } @loading { <p role="status" class="loading-inline">Loading administration…</p> } }
+      @if (view() === 'Report Configuration') { @defer (on immediate) { <app-workspace-setup (changed)="reload()" /> } @loading { <p role="status" class="loading-inline">Loading report configuration…</p> } }
+      @else if (view() === 'Administration') { @defer (on immediate) { <app-administration /> } @loading { <p role="status" class="loading-inline">Loading administration…</p> } }
       @else if (view() === 'Components and Responsibilities') { <app-component-responsibilities /> }
       @else {
         @if (loading()) { <p role="status" class="loading-inline">Refreshing authorized work…</p> }

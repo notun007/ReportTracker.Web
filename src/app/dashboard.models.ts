@@ -20,6 +20,7 @@ export interface SendingHistory {
 export interface SessionUser { id: string; displayName: string; email: string; divisionId: string; permissions: string[]; }
 export interface SessionResponse { setupRequired: boolean; user: SessionUser | null; }
 export interface Lookup { id: string; name: string; }
+export interface DivisionItem extends Lookup { code: string; isActive: boolean; }
 export interface Lookups { divisions: Lookup[]; officers: (Lookup & { divisionId: string })[]; }
 export interface SubmissionRecipient extends Lookup { departments: Lookup[]; }
 export interface SubmissionDestination { submissionRecipientId: string; submissionDepartmentIds: string[]; }

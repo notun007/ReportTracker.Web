@@ -6,12 +6,13 @@ import { DashboardService, SessionService, apiError } from './dashboard.service'
 import { DashboardSummary, Obligation, SendingHistory } from './dashboard.models';
 import { SignInComponent } from './sign-in.component';
 import { WorkspaceSetupComponent } from './workspace-setup.component';
+import { AdministrationComponent } from './administration.component';
 import { ComponentResponsibilitiesComponent } from './component-responsibilities.component';
 import { ObligationOperationsComponent } from './obligation-operations.component';
 import { OperationsPagesComponent } from './operations-pages.component';
 
 @Component({
-  imports: [CommonModule, FormsModule, SignInComponent, WorkspaceSetupComponent, ComponentResponsibilitiesComponent, ObligationOperationsComponent, OperationsPagesComponent],
+  imports: [CommonModule, FormsModule, SignInComponent, WorkspaceSetupComponent, AdministrationComponent, ComponentResponsibilitiesComponent, ObligationOperationsComponent, OperationsPagesComponent],
   selector: 'app-root', styleUrl: './app.scss', templateUrl: './app.html'
 })
 export class App {

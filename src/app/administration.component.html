@@ -1,0 +1,153 @@
+<nav class="report-tabbar admin-menu" aria-label="Administration screens">
+  @for (item of screens; track item.id) {
+    <button type="button" [attr.aria-current]="active() === item.id ? 'page' : null"
+      [disabled]="busy()" (click)="navigate(item.id)">{{ item.title }}</button>
+  }
+</nav>
+
+<section class="setup-card entry-card report-inline-layout" aria-labelledby="admin-entry-title">
+  <h2 id="admin-entry-title">{{ screen().title }}</h2>
+  @if (loadError()) {
+    <div class="error-banner" role="alert">{{ loadError() }} <button type="button" (click)="retry()">Retry</button></div>
+  }
+
+  @switch (active()) {
+    @case ('divisions') {
+      <form class="report-inline-fields" #form="ngForm" (ngSubmit)="addDivision(form)">
+        <label class="report-field"><span>Division code</span>
+          <input name="code" [(ngModel)]="division.code" (ngModelChange)="clearDuplicate('code')" required maxlength="40"
+            [disabled]="busy()" [attr.aria-invalid]="duplicate()?.field === 'code' || null" [attr.aria-describedby]="duplicate()?.field === 'code' ? 'admin-duplicate' : null">
+        </label>
+        <label class="report-field"><span>Division name</span>
+          <input name="name" [(ngModel)]="division.name" required maxlength="150" [disabled]="busy()">
+        </label>
+        <div class="entry-actions"><button class="primary" type="submit" [disabled]="form.invalid || entryBlocked() || !division.code.trim() || !division.name.trim()">Save division</button></div>
+      </form>
+    }
+    @case ('users') {
+      <form class="report-inline-fields" #form="ngForm" (ngSubmit)="addUser(form)">
+        <label class="report-field"><span>Employee ID</span>
+          <input name="employeeId" [(ngModel)]="user.employeeId" (ngModelChange)="clearDuplicate('employeeId')" required maxlength="40"
+            [disabled]="busy()" [attr.aria-invalid]="duplicate()?.field === 'employeeId' || null" [attr.aria-describedby]="duplicate()?.field === 'employeeId' ? 'admin-duplicate' : null">
+        </label>
+        <label class="report-field"><span>Display name</span>
+          <input name="displayName" [(ngModel)]="user.displayName" required maxlength="150" [disabled]="busy()">
+        </label>
+        <label class="report-field"><span>Email</span>
+          <input name="email" type="email" [(ngModel)]="user.email" (ngModelChange)="clearDuplicate('email')" required email maxlength="254" autocomplete="off"
+            [disabled]="busy()" [attr.aria-invalid]="duplicate()?.field === 'email' || null" [attr.aria-describedby]="duplicate()?.field === 'email' ? 'admin-duplicate' : null">
+        </label>
+        <label class="report-field"><span>Mobile number</span>
+          <input name="mobileNumber" type="tel" [(ngModel)]="user.mobileNumber" maxlength="30" [disabled]="busy()">
+        </label>
+        <label class="report-field"><span>Division</span>
+          <select name="divisionId" [(ngModel)]="user.divisionId" required [disabled]="busy() || divisions().loading">
+            <option value="">Choose division</option>
+            @for (division of activeDivisions(); track division.id) { <option [value]="division.id">{{ division.name }}</option> }
+          </select>
+        </label>
+        <label class="report-field"><span>Temporary password</span>
+          <input name="password" type="password" [(ngModel)]="user.password" required minlength="12" maxlength="128" autocomplete="new-password" [disabled]="busy()">
+        </label>
+        <label class="report-field"><span>Role</span>
+          <select name="isCoordinator" [(ngModel)]="user.isCoordinator" [disabled]="busy()">
+            <option [ngValue]="false">Assigned officer</option>
+            <option [ngValue]="true">Report Coordinator</option>
+          </select>
+        </label>
+        <div class="entry-actions"><button class="primary" type="submit" [disabled]="form.invalid || entryBlocked() || !user.employeeId.trim() || !user.displayName.trim()">Save user</button></div>
+      </form>
+    }
+    @case ('recipients') {
+      <form class="report-inline-fields" #form="ngForm" (ngSubmit)="addRecipient(form)">
+        <label class="report-field"><span>Organization name</span>
+          <input name="organizationName" [(ngModel)]="organizationName" (ngModelChange)="clearDuplicate('organizationName')" required maxlength="250"
+            [disabled]="busy()" [attr.aria-invalid]="duplicate()?.field === 'organizationName' || null" [attr.aria-describedby]="duplicate()?.field === 'organizationName' ? 'admin-duplicate' : null">
+        </label>
+        <div class="entry-actions"><button class="primary" type="submit" [disabled]="form.invalid || entryBlocked() || !organizationName.trim()">Save recipient</button></div>
+      </form>
+    }
+    @case ('departments') {
+      <form class="report-inline-fields" #form="ngForm" (ngSubmit)="addDepartment(form)">
+        <label class="report-field"><span>Submission recipient</span>
+          <select name="recipientId" [ngModel]="recipientId()" (ngModelChange)="chooseRecipient($event)" required [disabled]="busy() || recipients().loading">
+            <option value="">Choose submission recipient</option>
+            @for (recipient of recipients().rows; track recipient.id) { <option [value]="recipient.id">{{ recipient.name }}</option> }
+          </select>
+        </label>
+        <label class="report-field"><span>Department name</span>
+          <input name="departmentName" [(ngModel)]="departmentName" (ngModelChange)="clearDuplicate('departmentName')" required maxlength="150"
+            [disabled]="busy()" [attr.aria-invalid]="duplicate()?.field === 'departmentName' || null" [attr.aria-describedby]="duplicate()?.field === 'departmentName' ? 'admin-duplicate' : null">
+        </label>
+        <div class="entry-actions"><button class="primary" type="submit" [disabled]="form.invalid || entryBlocked() || !departmentName.trim()">Save department</button></div>
+      </form>
+    }
+  }
+  @if (duplicate(); as issue) { <p class="field-error" id="admin-duplicate">{{ issue.text }}</p> }
+</section>
+
+<section class="tracker-panel admin-grid" aria-labelledby="admin-grid-title">
+  <div class="panel-heading">
+    <div><h2 id="admin-grid-title">{{ screen().list }} ({{ count() }})</h2>
+      @if (active() === 'departments' && selectedRecipient(); as recipient) {
+        <span>{{ recipient.name }}</span>
+      }
+    </div>
+    <label class="grid-search"><span class="sr-only">Search records</span>
+      <input type="search" placeholder="Search records" [ngModel]="query()" (ngModelChange)="query.set($event)">
+    </label>
+  </div>
+  <div class="table-wrap" tabindex="0" role="region" [attr.aria-label]="screen().list">
+    <table [class.user-table]="active() === 'users'" aria-labelledby="admin-grid-title">
+      <thead><tr>@for (column of screen().columns; track column) { <th scope="col">{{ column }}</th> }</tr></thead>
+      <tbody>
+        @switch (active()) {
+          @case ('divisions') {
+            @for (row of filteredDivisions(); track row.id) {
+              <tr><td>{{ row.code }}</td><td><strong>{{ row.name }}</strong></td><td>{{ row.isActive ? 'Active' : 'Inactive' }}</td></tr>
+            }
+          }
+          @case ('users') {
+            @for (row of filteredUsers(); track row.id) {
+              <tr><td>{{ row.employeeId }}</td><td><strong>{{ row.displayName }}</strong></td>
+                <td>{{ row.email }} @if (row.mobileNumber) { <span>{{ row.mobileNumber }}</span> }</td>
+                <td>{{ divisionName(row.divisionId) }}</td><td>{{ row.roles.join(', ') || 'Assigned officer' }}</td>
+                <td><span class="status" [class.sent]="row.isActive">{{ row.isActive ? 'Active' : 'Inactive' }}</span></td>
+                <td><div class="row-actions">
+                  <button type="button" class="link-button" [disabled]="busy()" (click)="toggleUser(row)"
+                    [attr.aria-label]="(row.isActive ? 'Deactivate ' : 'Activate ') + row.displayName">{{ row.isActive ? 'Deactivate' : 'Activate' }}</button>
+                  <button type="button" class="link-button" [disabled]="busy()" (click)="resetPassword(row)"
+                    [attr.aria-label]="'Reset password for ' + row.displayName">Reset password</button>
+                </div></td>
+              </tr>
+            }
+          }
+          @case ('recipients') {
+            @for (row of filteredRecipients(); track row.id) {
+              <tr><td><strong>{{ row.name }}</strong></td><td>{{ row.departments.length }}</td></tr>
+            }
+          }
+          @case ('departments') {
+            @for (row of filteredDepartments(); track row.id) { <tr><td><strong>{{ row.name }}</strong></td></tr> }
+          }
+        }
+        @if (!count()) {
+          <tr><td class="empty" [attr.colspan]="screen().columns.length">
+            @if (currentDirectory().loading) { Loading records… }
+            @else if (loadError()) { Records could not be loaded. }
+            @else if (active() === 'departments' && !selectedRecipient()) { Choose a recipient to view its departments. }
+            @else if (query().trim()) { No records match your search. }
+            @else { No records saved. }
+          </td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
+
+@if (toast(); as message) {
+  <div class="toast admin-toast" [class.error-toast]="message.error" [attr.role]="message.error ? 'alert' : 'status'">
+    <span>{{ message.text }}</span>
+    <button type="button" aria-label="Dismiss notification" (click)="dismissToast()">×</button>
+  </div>
+}

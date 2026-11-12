@@ -1,18 +1,17 @@
-import { Component, OnInit, OnDestroy, computed, inject, input, output, signal, viewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, computed, inject, output, signal, viewChild } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
-import { forkJoin, Observable, of, Subscription } from 'rxjs';
+import { forkJoin, Observable, Subscription } from 'rxjs';
 import { DashboardService, SessionService, apiError } from './dashboard.service';
-import { Lookups, ReportDefinition, ReportingCycle, SubmissionDestination, SubmissionRecipient, UserItem } from './dashboard.models';
+import { Lookups, ReportDefinition, ReportingCycle, SubmissionDestination, SubmissionRecipient } from './dashboard.models';
 
 import { SubmissionDestinationPickerComponent } from './submission-destination-picker.component';
-import { SubmissionRecipientAdminComponent } from './submission-recipient-admin.component';
 import { ReportComponentEditorComponent } from './report-component-editor.component';
 import { ReportProfileComponent } from './report-profile.component';
 
 type SetupTab = 'reports' | 'create' | 'profile' | 'components' | 'cycles';
 
 @Component({
-  selector: 'app-workspace-setup', imports: [FormsModule, ReportComponentEditorComponent, ReportProfileComponent, SubmissionDestinationPickerComponent, SubmissionRecipientAdminComponent],
+  selector: 'app-workspace-setup', imports: [FormsModule, ReportComponentEditorComponent, ReportProfileComponent, SubmissionDestinationPickerComponent],
   styles: [`
     .cycle-details { display:grid; gap:14px; min-width:0; margin:0; padding:0; border:0; }
     .cycle-notice { margin:0; color:var(--muted); }
@@ -34,30 +33,8 @@ type SetupTab = 'reports' | 'create' | 'profile' | 'components' | 'cycles';
   template: `
     @if (error()) { <div class="error-banner" role="alert">{{ error() }} <button type="button" (click)="load()">Retry</button></div> }
     @if (message()) { <div class="success-banner" role="status">{{ message() }}</div> }
-    @if (divisionToast()) { <div class="toast division-error-toast" role="alert"><span class="toast-icon" aria-hidden="true">!</span><span class="toast-message">{{ divisionToast() }}</span><button type="button" (click)="dismissDivisionToast()" aria-label="Dismiss division error">×</button></div> }
     @if (loading()) { <p class="loading">Loading workspace setup…</p> }
-    @else if (mode() === 'Administration') {
-      <section class="setup-grid">
-        <article class="setup-card"><h3>Add division</h3><form #divisionForm="ngForm" (ngSubmit)="addDivision(divisionForm)">
-          <label>Code<input name="code" [(ngModel)]="division.code" required maxlength="40"></label>
-          <label>Name<input name="name" [(ngModel)]="division.name" required maxlength="150"></label>
-          <button class="primary" type="submit" [disabled]="busy() || divisionForm.invalid">Add division</button>
-        </form></article>
-        <article class="setup-card"><h3>Add user</h3><form #userForm="ngForm" (ngSubmit)="addUser(userForm)">
-          <label>Employee ID<input name="employeeId" [(ngModel)]="user.employeeId" required maxlength="40"></label>
-          <label>Display name<input name="displayName" [(ngModel)]="user.displayName" required maxlength="150"></label>
-          <label>Email<input name="email" type="email" [(ngModel)]="user.email" required email maxlength="254" autocomplete="off"></label>
-          <label>Mobile number<input name="mobileNumber" [(ngModel)]="user.mobileNumber" maxlength="30" placeholder="+8801…"></label>
-          <label>Division<select name="divisionId" [(ngModel)]="user.divisionId" required><option value="">Choose division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
-          <label>Initial password<input name="password" type="password" [(ngModel)]="user.password" required minlength="12" maxlength="128" autocomplete="new-password"></label>
-          <label class="checkbox"><input name="coordinator" type="checkbox" [(ngModel)]="user.isCoordinator">Report Coordinator for this division</label>
-          <small>Officers can record their assigned obligations. Coordinators can also set up reports and monitor their division.</small>
-          <button class="primary" type="submit" [disabled]="busy() || userForm.invalid">Create user</button>
-        </form></article>
-      </section>
-      <section class="tracker-panel"><div class="panel-heading"><h3>Users</h3></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Employee ID</th><th>Contact</th><th>Roles</th><th>Status</th><th>Security actions</th></tr></thead><tbody>@for (u of users(); track u.id) { <tr><td>{{ u.displayName }}</td><td>{{ u.employeeId }}</td><td>{{ u.email }}<span>{{u.mobileNumber || 'No mobile number'}}</span></td><td>{{ u.roles.join(', ') || 'Assigned officer' }}</td><td><span class="status" [class.sent]="u.isActive">{{ u.isActive ? 'Active' : 'Inactive' }}</span></td><td><div class="row-actions"><button class="link-button" type="button" (click)="toggleUser(u)">{{u.isActive?'Deactivate':'Activate'}}</button><button class="link-button" type="button" (click)="resetUserPassword(u)">Reset password</button></div></td></tr> }</tbody></table></div></section>
-      <app-submission-recipient-admin />
-    } @else {
+    @else {
       <section class="report-workspace">
         <div class="report-tabbar" role="tablist" aria-label="Report configuration sections">
           @for (tab of tabs; track tab.id; let i=$index) {
@@ -173,23 +150,17 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
   protected readonly selectedReport = computed(() => this.reports().find(report => report.id === this.selectedReportId()));
   protected readonly componentsOpened = signal(false);
   private readonly componentEditor = viewChild(ReportComponentEditorComponent);
-  readonly mode = input.required<string>();
   readonly changed = output<void>();
   private readonly api = inject(DashboardService);
   private readonly session = inject(SessionService);
   protected readonly lookups = signal<Lookups>({ divisions: [], officers: [] });
   protected readonly submissionRecipients = signal<SubmissionRecipient[]>([]);
   protected readonly reports = signal<ReportDefinition[]>([]);
-  protected readonly users = signal<UserItem[]>([]);
   protected readonly loading = signal(true);
   protected readonly busy = signal(false);
   protected readonly error = signal('');
   protected readonly message = signal('');
-  protected readonly divisionToast = signal('');
-  private divisionToastTimer: ReturnType<typeof setTimeout> | undefined;
   protected readonly frequencies = ['Daily', 'Weekly', 'Biweekly', 'Monthly', 'Quarterly', 'HalfYearly', 'Yearly', 'AdHoc'];
-  protected division = { code: '', name: '' };
-  protected user = { employeeId: '', displayName: '', email: '', mobileNumber: '', divisionId: '', password: '', isCoordinator: false };
   protected report = this.emptyReport();
   protected cycle = { reportId: '', periodKey: '', periodLabel: '', periodStart: '', periodEnd: '' };
   protected tasks = [this.newTask()];
@@ -199,16 +170,15 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
   protected savedCycleId = '';
   private cycleRequest?: Subscription;
   ngOnInit() { this.load(); }
-  ngOnDestroy() { clearTimeout(this.divisionToastTimer); this.cycleRequest?.unsubscribe(); }
+  ngOnDestroy() { this.cycleRequest?.unsubscribe(); }
   protected officers(divisionId: string) { return this.lookups().officers.filter(u => u.divisionId === divisionId); }
   protected load(showLoading = true) {
     if (showLoading) this.loading.set(true);
     this.error.set('');
-    forkJoin({ lookups: this.api.lookups(), reports: this.api.reports(), recipients: this.mode() === 'Administration' ? of([]) : this.api.submissionRecipients() }).subscribe({ next: data => {
+    forkJoin({ lookups: this.api.lookups(), reports: this.api.reports(), recipients: this.api.submissionRecipients() }).subscribe({ next: data => {
       this.lookups.set(data.lookups); this.reports.set(data.reports); this.submissionRecipients.set(data.recipients); this.loading.set(false);
       if (!data.reports.some(row => row.id === this.selectedReportId())) this.selectedReportId.set(data.reports[0]?.id ?? '');
       if (this.activeTab() === 'cycles' && this.cycle.reportId !== this.selectedReportId()) this.selectReport(this.selectedReportId());
-      if (this.mode() === 'Administration') this.api.users().subscribe({ next: users => this.users.set(users), error: error => this.error.set(apiError(error)) });
     }, error: error => { this.loading.set(false); this.error.set(apiError(error)); } });
   }
   protected hasDivision(id: string) { return this.lookups().divisions.some(d => d.id === id); }
@@ -284,25 +254,6 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
     (event.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLButtonElement>('[role=tab]')[next]?.focus();
   }
   private emptyReport() { return { code: '', name: '', ownerDivisionId: this.session.user()?.divisionId ?? '', receivingDivisionId: '', submittingDivisionId: '', primarySubmittingOfficerId: '', deputySubmittingOfficerId: '', submissionRecipientId: '', submissionDepartmentIds: [] as string[], frequency: 'Monthly', dueTime: '17:00', componentDeadlineOffsetDays: 1, instructionReference: '', description: '' }; }
-  protected addDivision(form: NgForm) {
-    if (form.invalid || this.busy()) return;
-    this.busy.set(true); this.error.set(''); this.message.set(''); this.dismissDivisionToast();
-    this.api.createDivision({ code: this.division.code.trim(), name: this.division.name.trim() }).subscribe({
-      next: () => {
-        this.busy.set(false); this.division = { code: '', name: '' }; this.message.set('Division created.');
-        this.changed.emit(); this.load();
-      },
-      error: error => {
-        this.busy.set(false);
-        this.divisionToast.set(apiError(error));
-        this.divisionToastTimer = setTimeout(() => this.divisionToast.set(''), 8000);
-      }
-    });
-  }
-  protected dismissDivisionToast() { clearTimeout(this.divisionToastTimer); this.divisionToast.set(''); }
-  protected addUser(form: NgForm) { if (form.invalid || this.busy()) return; this.save(this.api.createUser(this.user), 'User created.', () => { this.user = { employeeId: '', displayName: '', email: '', mobileNumber: '', divisionId: '', password: '', isCoordinator: false }; }); }
-  protected toggleUser(user:UserItem){this.save(this.api.changeUserStatus(user.id,!user.isActive),`User ${user.isActive?'deactivated':'activated'}.`,()=>{});}
-  protected resetUserPassword(user:UserItem){const password=window.prompt(`Enter a temporary password for ${user.displayName} (minimum 12 characters):`);if(!password)return;if(password.length<12){this.error.set('Temporary password must contain at least 12 characters.');return;}this.save(this.api.resetPassword(user.id,password),'Password reset completed.',()=>{});}
   protected validDestination(destination: SubmissionDestination) {
     const recipient = this.submissionRecipients().find(r => r.id === destination.submissionRecipientId);
     return !!recipient && destination.submissionDepartmentIds.length > 0
@@ -336,7 +287,7 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
   private newTask() { return { name: 'Final submission', type: 'BB', divisionId: this.session.user()?.divisionId ?? '', primaryOfficerId: this.session.user()?.id ?? '', deputyOfficerId: '', receivingDivisionId: '', divisionName: '', primaryOfficerName: '', deputyOfficerName: '', recipient: '', dueLocal: '', receiptRequired: false, evidenceRequired: false }; }
   private save<T>(request: Observable<T>, message: string, reset: (value:T) => void) {
     this.busy.set(true); this.error.set(''); this.message.set('');
-    request.subscribe({ next: value => { this.busy.set(false); reset(value); this.message.set(message); this.changed.emit(); this.load(this.mode() === 'Administration'); }, error: error => { this.busy.set(false); this.error.set(apiError(error)); } });
+    request.subscribe({ next: value => { this.busy.set(false); reset(value); this.message.set(message); this.changed.emit(); this.load(false); }, error: error => { this.busy.set(false); this.error.set(apiError(error)); } });
   }
 }
 
