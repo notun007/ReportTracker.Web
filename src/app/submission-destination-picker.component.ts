@@ -10,9 +10,20 @@ import { SubmissionDestination, SubmissionRecipient } from './dashboard.models';
     .departments,.destination-notice { grid-column:1/-1; min-width:0; }
     .department-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 16px; padding:3px; }
     .recipient-controls { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; align-items:end; min-width:0; }
-    .recipient-controls label { min-width:0; }
-    .recipient-controls select { min-width:0; }
-    .recipient-controls button { min-height:40px; }
+    .recipient-controls label {
+      display:grid;
+      grid-template-columns:var(--report-field-columns,minmax(0,1fr));
+      gap:6px var(--report-field-gap,12px);
+      align-items:center;
+      min-width:0;
+    }
+    .recipient-controls label > span { line-height:1.35; }
+    .recipient-controls select { width:100%; min-width:0; }
+    .recipient-controls button { min-height:40px; padding-inline:12px; white-space:nowrap; }
+    @container report-form (max-width:560px) {
+      .recipient-controls { grid-template-columns:minmax(0,1fr); }
+      .recipient-controls button { justify-self:end; }
+    }
     .department-search { margin-bottom:12px; }
     .department-viewer { width:min(820px,calc(100% - 24px)); min-height:min(380px,82dvh); max-height:92dvh; }
     .viewer-content { display:grid; gap:14px; padding:16px 22px 22px; }
@@ -26,7 +37,7 @@ import { SubmissionDestination, SubmissionRecipient } from './dashboard.models';
   `],
   template: `
     <div class="recipient-controls">
-      <label>Submission recipient
+      <label><span>Submission recipient</span>
         <select [ngModel]="destination().submissionRecipientId" [ngModelOptions]="{standalone:true}" (ngModelChange)="selectRecipient($event)" [disabled]="disabled()" required>
           <option value="">Choose submission recipient</option>
           @for (recipient of recipients(); track recipient.id) { <option [value]="recipient.id">{{ recipient.name }}</option> }

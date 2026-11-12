@@ -17,8 +17,9 @@ export interface ReportComponentDraft {
 @Component({
   selector:'app-report-component-editor', imports:[FormsModule, ComponentContributorsComponent, ContributorAssignmentTableComponent],
   styles:[`
-    :host { display:block; padding:18px 22px; }
+    :host { display:block; container:report-form / inline-size; padding:18px 22px; }
     form[hidden] { display:none; }
+    @container report-form (max-width:880px) { form { grid-template-columns:minmax(0,1fr); } }
     header { display:flex; justify-content:space-between; gap:16px; align-items:start; margin-bottom:18px; }
     h2 { scroll-margin-top:76px; margin:0; font-size:22px; letter-spacing:-.025em; color:#12375f; } p { color:var(--muted); line-height:1.6; }
     .context { padding:12px; background:var(--surface); border:1px solid var(--line); border-radius:6px; font-size:12px; }
@@ -65,13 +66,13 @@ export interface ReportComponentDraft {
     </header>
     
     @if (message()) { <div class="success-banner" role="status">{{ message() }}</div> }
-    <form [hidden]="embedded() && !creating()" #componentForm="ngForm" (ngSubmit)="save(componentForm)">
+    <form class="report-inline-fields" [hidden]="embedded() && !creating()" #componentForm="ngForm" (ngSubmit)="save(componentForm)">
       <fieldset [disabled]="saving()" style="display:contents">
-      @if (!embedded()) { <label>Report<select name="componentReport" [(ngModel)]="reportId" (ngModelChange)="reportChanged()" [disabled]="!!component() || saving()"><option value="">New report{{ reportName() ? ' - ' + reportName() : ' (draft)' }}</option>@for (report of reports(); track report.id) { <option [value]="report.id">{{ report.code }} - {{ report.name }}</option> }</select></label> }
-      <label>Component name<input name="componentName" [(ngModel)]="fields.name" required maxlength="250"></label>
-      <label>Preparing division<select name="componentPreparingDivision" [(ngModel)]="fields.providerDivisionId" (ngModelChange)="fields.contributors=[]" required><option value="">Choose preparing division</option>@for (division of lookups().divisions; track division.id) { <option [value]="division.id">{{ division.name }}</option> }</select></label>
-      <label>Description<textarea name="componentDescription" [(ngModel)]="fields.description" rows="2" maxlength="1000"></textarea></label>
-      <label>Display order (optional)<input type="number" name="componentOrder" [(ngModel)]="fields.sequence" placeholder="0" min="0" max="10000" step="1"></label>
+      @if (!embedded()) { <label class="report-field"><span>Report</span><select name="componentReport" [(ngModel)]="reportId" (ngModelChange)="reportChanged()" [disabled]="!!component() || saving()"><option value="">New report{{ reportName() ? ' - ' + reportName() : ' (draft)' }}</option>@for (report of reports(); track report.id) { <option [value]="report.id">{{ report.code }} - {{ report.name }}</option> }</select></label> }
+      <label class="report-field"><span>Component name</span><input name="componentName" [(ngModel)]="fields.name" required maxlength="250"></label>
+      <label class="report-field"><span>Preparing division</span><select name="componentPreparingDivision" [(ngModel)]="fields.providerDivisionId" (ngModelChange)="fields.contributors=[]" required><option value="">Choose preparing division</option>@for (division of lookups().divisions; track division.id) { <option [value]="division.id">{{ division.name }}</option> }</select></label>
+      <label class="report-field"><span>Description</span><textarea name="componentDescription" [(ngModel)]="fields.description" rows="2" maxlength="1000"></textarea></label>
+      <label class="report-field"><span>Display order (optional)</span><input type="number" name="componentOrder" [(ngModel)]="fields.sequence" placeholder="0" min="0" max="10000" step="1"></label>
       <app-component-contributors [automaticRows]="true" [rows]="fields.contributors" [members]="teamMembers(fields.providerDivisionId)" [disabled]="saving()" (rowsChange)="fields.contributors=$event" />
       <fieldset class="requirements">
         <legend>Requirements</legend>

@@ -46,7 +46,7 @@ export class App {
   protected readonly canSetup = computed(() => this.session.user()?.permissions.includes('reports.manage') ?? false);
   protected readonly canAdmin = computed(() => this.session.user()?.permissions.includes('administration.manage') ?? false);
   protected readonly navigation = computed(() => [
-    'Reporting Overview', 'Report Register', ...(this.canSetup() ? ['Report Setup', 'Components and Responsibilities'] : []),
+    'Reporting Overview', 'Report Register', ...(this.canSetup() ? ['Report Configuration', 'Components and Responsibilities'] : []),
     'Component Submission', 'Submission Readiness', 'Main Report Submission', 'Deadline Extensions', 'Reminder Settings', 'Reporting Calendar'
   ]);
   protected readonly divisions = computed(() => [...new Map((this.dashboard()?.upcoming ?? []).filter(row => row.divisionId && row.division).map(row => [row.divisionId, { id: row.divisionId, name: row.division }])).values()].sort((a, b) => a.name.localeCompare(b.name)));
@@ -104,7 +104,7 @@ export class App {
   protected logout() { this.session.logout().subscribe({ next: () => { this.dashboard.set(null); this.selected.set(null); this.historyRow.set(null); }, error: error => this.error.set(apiError(error)) }); }
   protected statusClass(value: string) { return value.toLowerCase().replaceAll(' ', '-'); }
   protected navIcon(item: string) { return ({
-    'Reporting Overview':'⌂', 'Report Register':'▤', 'Report Setup':'⚙', 'Components and Responsibilities':'◫',
+    'Reporting Overview':'⌂', 'Report Register':'▤', 'Report Configuration':'⚙', 'Components and Responsibilities':'◫',
     'Component Submission':'✓', 'Submission Readiness':'◷', 'Main Report Submission':'↗', 'Deadline Extensions':'◴',
     'Reminder Settings':'♢', 'Reporting Calendar':'□'
   } as Record<string,string>)[item] ?? '•'; }

@@ -19,14 +19,14 @@ function loadRows<T>(reportId: string, request: Observable<T[]>) {
   imports: [DatePipe],
   styles: [`
 
-    :host { display:grid; gap:16px; min-width:0; }
+    :host { display:grid; container:report-form / inline-size; gap:16px; min-width:0; }
     .profile-card { min-width:0; overflow:hidden; border:1px solid var(--line); border-radius:var(--workspace-radius); background:#fff; box-shadow:var(--panel-shadow); }
     .profile-heading { margin:0; padding:14px 18px; border-bottom:1px solid var(--line); background:linear-gradient(180deg,#fff,#eff5fb); color:#12375f; font-size:17px; }
     .card-body { padding:16px 18px; }
-    .fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,215px),1fr)); gap:12px 14px; margin:0; }
-    .field { display:flex; flex-direction:column; gap:5px; min-width:0; }
-    .field dt { color:var(--muted); font-size:12px; font-weight:600; }
-    .field dd { display:flex; align-items:center; flex:1; min-height:38px; margin:0; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:#f7fafe; color:var(--ink); font-size:13px; line-height:1.4; overflow-wrap:anywhere; }
+    .fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 16px; margin:0; }
+    .fields .field { align-items:stretch; min-width:0; }
+    .field dt { align-self:center; color:var(--muted); font-size:12px; font-weight:600; }
+    .field dd { display:flex; align-items:center; min-height:38px; margin:0; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:#f7fafe; color:var(--ink); font-size:13px; line-height:1.4; overflow-wrap:anywhere; }
     .field .empty-value { color:var(--muted); }
     .fields .full { grid-column:1/-1; }
     .field .description { white-space:pre-wrap; }
@@ -42,8 +42,7 @@ function loadRows<T>(reportId: string, request: Observable<T[]>) {
     .entry[open] > summary { border-radius:9px 9px 0 0; }
     .entry-caption { display:block; margin-top:2px; color:var(--muted); font-size:12px; }
     .entry-body { padding:12px; border-top:1px solid var(--line); }
-    .entry-body .fields { grid-template-columns:repeat(auto-fit,minmax(min(100%,160px),1fr)); }
-    .cycle-entry .fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .entry-body .report-inline-fields { --report-field-columns:min(7.5rem,42%) minmax(0,1fr); }
     .department-entry { margin-top:12px; }
     .departments { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr)); gap:8px 24px; margin:0; padding-inline-start:18px; font-size:13px; overflow-wrap:anywhere; }
     .contributors { display:grid; gap:8px; margin:0; padding:0; list-style:none; font-size:13px; overflow-wrap:anywhere; }
@@ -51,9 +50,15 @@ function loadRows<T>(reportId: string, request: Observable<T[]>) {
     .field .contributor-value { display:block; }
     .state { margin:0; padding:16px 18px; color:var(--muted); font-size:13px; }
     .state[role=alert] { color:#8e2424; }
+    @container report-form (max-width:700px) {
+      .card-body > .fields { grid-template-columns:minmax(0,1fr); }
+    }
+    @container report-form (max-width:440px) {
+      .fields,.entry-body .fields { grid-template-columns:minmax(0,1fr); }
+      .entry-body .report-inline-fields { --report-field-columns:minmax(0,1fr); }
+    }
     @media(max-width:520px) {
       .card-body { padding:12px; }
-      .fields,.entry-body .fields { grid-template-columns:repeat(2,minmax(0,1fr)); }
     }
   `],
   template: `
@@ -61,11 +66,11 @@ function loadRows<T>(reportId: string, request: Observable<T[]>) {
     <section class="profile-card" aria-labelledby="profile-definition">
       <h3 id="profile-definition" class="profile-heading">Report definition</h3>
       <div class="card-body">
-        <dl class="fields">
+        <dl class="fields report-inline-fields">
           @for (field of definition(); track field.label) {
-            <div class="field"><dt>{{ field.label }}</dt><dd [class.empty-value]="field.value === '—'">{{ field.value }}</dd></div>
+            <div class="field report-field"><dt>{{ field.label }}</dt><dd [class.empty-value]="field.value === '—'">{{ field.value }}</dd></div>
           }
-          <div class="field full"><dt>Description</dt><dd class="description" [class.empty-value]="!report().description">{{ report().description || '—' }}</dd></div>
+          <div class="field report-field full"><dt>Description</dt><dd class="description" [class.empty-value]="!report().description">{{ report().description || '—' }}</dd></div>
         </dl>
         <details class="entry department-entry">
           <summary><strong>Recipient departments ({{ departments().length }})</strong></summary>
@@ -98,11 +103,11 @@ function loadRows<T>(reportId: string, request: Observable<T[]>) {
                   </span>
                 </summary>
                 <div class="entry-body">
-                  <dl class="fields">
-                    <div class="field"><dt>Period key</dt><dd>{{ cycle.periodKey }}</dd></div>
-                    <div class="field"><dt>Period start</dt><dd>{{ cycle.periodStart | date:'dd MMM y' }}</dd></div>
-                    <div class="field"><dt>Period end</dt><dd>{{ cycle.periodEnd | date:'dd MMM y' }}</dd></div>
-                    <div class="field"><dt>Final submission deadline (Dhaka)</dt><dd>{{ cycleDeadline(cycle) }}</dd></div>
+                  <dl class="fields report-inline-fields">
+                    <div class="field report-field"><dt>Period key</dt><dd>{{ cycle.periodKey }}</dd></div>
+                    <div class="field report-field"><dt>Period start</dt><dd>{{ cycle.periodStart | date:'dd MMM y' }}</dd></div>
+                    <div class="field report-field"><dt>Period end</dt><dd>{{ cycle.periodEnd | date:'dd MMM y' }}</dd></div>
+                    <div class="field report-field"><dt>Final submission deadline (Dhaka)</dt><dd>{{ cycleDeadline(cycle) }}</dd></div>
                   </dl>
                 </div>
               </details>
@@ -128,14 +133,14 @@ function loadRows<T>(reportId: string, request: Observable<T[]>) {
                   </span>
                 </summary>
                 <div class="entry-body">
-                  <dl class="fields">
-                    <div class="field"><dt>Preparing division</dt><dd>{{ divisionName(component.providerDivisionId) }}</dd></div>
-                    <div class="field"><dt>Receiving division</dt><dd>{{ divisionName(component.receivingDivisionId) }}</dd></div>
-                    <div class="field"><dt>Display order</dt><dd>{{ component.sequence }}</dd></div>
-                    <div class="field"><dt>Lead days</dt><dd>{{ component.deadlineOffsetDays }}</dd></div>
-                    <div class="field"><dt>Receipt confirmation</dt><dd>{{ component.receiptRequired ? 'Required' : 'Not required' }}</dd></div>
-                    <div class="field"><dt>Confirmation evidence</dt><dd>{{ component.evidenceRequired ? 'Required' : 'Not required' }}</dd></div>
-                    <div class="field full"><dt>Contributors</dt><dd class="contributor-value">
+                  <dl class="fields report-inline-fields">
+                    <div class="field report-field"><dt>Preparing division</dt><dd>{{ divisionName(component.providerDivisionId) }}</dd></div>
+                    <div class="field report-field"><dt>Receiving division</dt><dd>{{ divisionName(component.receivingDivisionId) }}</dd></div>
+                    <div class="field report-field"><dt>Display order</dt><dd>{{ component.sequence }}</dd></div>
+                    <div class="field report-field"><dt>Lead days</dt><dd>{{ component.deadlineOffsetDays }}</dd></div>
+                    <div class="field report-field"><dt>Receipt confirmation</dt><dd>{{ component.receiptRequired ? 'Required' : 'Not required' }}</dd></div>
+                    <div class="field report-field"><dt>Confirmation evidence</dt><dd>{{ component.evidenceRequired ? 'Required' : 'Not required' }}</dd></div>
+                    <div class="field report-field full"><dt>Contributors</dt><dd class="contributor-value">
                       <ul class="contributors">
                         @for (contributor of component.contributors; track contributor.userId) {
                           <li><strong>{{ memberName(contributor.userId) }}</strong>
@@ -145,7 +150,7 @@ function loadRows<T>(reportId: string, request: Observable<T[]>) {
                         } @empty { <li>Unassigned</li> }
                       </ul>
                     </dd></div>
-                    <div class="field full"><dt>Description</dt><dd class="description" [class.empty-value]="!component.description">{{ component.description || '—' }}</dd></div>
+                    <div class="field report-field full"><dt>Description</dt><dd class="description" [class.empty-value]="!component.description">{{ component.description || '—' }}</dd></div>
                   </dl>
                 </div>
               </details>

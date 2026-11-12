@@ -13,7 +13,8 @@ export function formatContributorRoles(roles: ContributorRole[]): string {
   selector: 'app-contributor-role-picker',
   styles: [`
     :host { display:block; min-width:0; }
-    .roles { display:grid; gap:5px; position:relative; min-width:0; }
+    .roles { display:grid; grid-template-columns:var(--contributor-role-columns,minmax(0,1fr)); align-items:center; gap:5px var(--report-field-gap,12px); min-width:0; }
+    .role-control { position:relative; min-width:0; }
     .roles-title { font-size:12px; font-weight:600; }
     .role-trigger { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; min-height:40px; padding:8px 10px; border:1px solid var(--control-line); border-radius:8px; background:var(--control-fill); color:var(--ink); text-align:left; font-size:13px; }
     .role-menu { position:absolute; inset:100% 0 auto; z-index:1; margin-top:4px; display:grid; gap:4px; border:1px solid var(--line); border-radius:8px; background:#fff; box-shadow:0 5px 16px #152b481a; padding:8px; }
@@ -24,23 +25,25 @@ export function formatContributorRoles(roles: ContributorRole[]): string {
   template: `
     <div class="roles" (focusout)="closeIfFocusLeaves($event)" (keydown.escape)="closeOnEscape($event, roleTrigger)">
       <span class="roles-title">Contributor roles</span>
-      <button #roleTrigger class="role-trigger" type="button" aria-label="Contributor roles"
-        [disabled]="disabled()" [attr.aria-expanded]="rolesOpen()" (click)="rolesOpen.set(!rolesOpen())">
-        <span>{{ summary() || 'Choose roles' }}</span>
-        <span aria-hidden="true">▾</span>
-      </button>
-      @if (rolesOpen() && !disabled()) {
-        <div class="role-menu" role="group" aria-label="Choose contributor roles">
-          @for (role of options; track role) {
-            <label class="role-option">
-              <input #roleCheck type="checkbox" [checked]="roles().includes(role)"
-                (change)="setRole(role, roleCheck.checked)">
-              {{ contributorRoles[role] }}
-            </label>
-          }
-          <button class="link-button role-done" type="button" (click)="closeRoles(roleTrigger)">Done</button>
-        </div>
-      }
+      <div class="role-control">
+        <button #roleTrigger class="role-trigger" type="button" aria-label="Contributor roles"
+          [disabled]="disabled()" [attr.aria-expanded]="rolesOpen()" (click)="rolesOpen.set(!rolesOpen())">
+          <span>{{ summary() || 'Choose roles' }}</span>
+          <span aria-hidden="true">▾</span>
+        </button>
+        @if (rolesOpen() && !disabled()) {
+          <div class="role-menu" role="group" aria-label="Choose contributor roles">
+            @for (role of options; track role) {
+              <label class="role-option">
+                <input #roleCheck type="checkbox" [checked]="roles().includes(role)"
+                  (change)="setRole(role, roleCheck.checked)">
+                {{ contributorRoles[role] }}
+              </label>
+            }
+            <button class="link-button role-done" type="button" (click)="closeRoles(roleTrigger)">Done</button>
+          </div>
+        }
+      </div>
     </div>
   `
 })

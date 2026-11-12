@@ -59,9 +59,14 @@ export function contributorError(rows: ContributorSelection[], members: Lookup[]
     .add { justify-self:start; }
     .automatic .contributor-row { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 16px; }
     .automatic .contributor-row:last-child { border-bottom:0; padding-bottom:0; }
+    .automatic app-contributor-role-picker { --contributor-role-columns:var(--report-field-columns); }
     .automatic .handover { grid-column:1; grid-row:2; display:flex; align-items:center; gap:8px; }
     .automatic .handover input { width:16px; height:16px; min-height:16px; margin:0; padding:0; accent-color:var(--blue); }
     .automatic .remove { grid-column:2; grid-row:2; min-height:30px; }
+    @container report-form (max-width:880px) {
+      .automatic .contributor-row { grid-template-columns:minmax(0,1fr); }
+      .automatic .handover,.automatic .remove { grid-column:1; grid-row:auto; }
+    }
     @media(max-width:480px) {
       .automatic .contributor-row { grid-template-columns:minmax(0,1fr); }
       .automatic .handover,.automatic .remove { grid-column:1; grid-row:auto; }
@@ -73,7 +78,7 @@ export function contributorError(rows: ContributorSelection[], members: Lookup[]
       <legend>Component contributors</legend>
       @for (row of displayedRows(); track $index; let i = $index) {
         <div class="contributor-row">
-          <label>Team member
+          <label class="report-field"><span>Team member</span>
             <select [ngModel]="row.userId" [ngModelOptions]="{standalone:true}" (ngModelChange)="selectMember(i,$event)">
               <option value="">{{ automaticRows() && !members().length ? 'No team members available' : 'Choose team member' }}</option>
               @if (row.userId && !hasMember(row.userId)) { <option [value]="row.userId" disabled>Unavailable team member</option> }

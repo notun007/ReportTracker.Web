@@ -19,7 +19,7 @@ import { DashboardService, apiError } from './dashboard.service';
         <h3>Add report component</h3>
         <form #componentForm="ngForm" (ngSubmit)="save(componentForm)">
           <label>Report<select name="reportId" [disabled]="saving()" [(ngModel)]="reportId" (ngModelChange)="loadComponents()" required><option value="">Choose report</option>@for (report of reports(); track report.id) { <option [value]="report.id">{{ report.code }} — {{ report.name }}</option> }</select></label>
-          @if (reportId && !reportReceiver()) { <p role="status">Set the receiving division in Report Setup before adding components to this report.</p> }
+          @if (reportId && !reportReceiver()) { <p role="status">Set the receiving division in Report Configuration before adding components to this report.</p> }
           <label>Component name<input name="name" [(ngModel)]="form.name" required maxlength="250"></label>
           <label>Description<textarea name="description" [(ngModel)]="form.description" maxlength="1000" rows="3"></textarea></label>
           <div class="form-grid">

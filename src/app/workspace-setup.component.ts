@@ -20,6 +20,9 @@ type SetupTab = 'reports' | 'create' | 'profile' | 'components' | 'cycles';
     .setup-editor h3 { margin:0 0 14px; }
     .setup-editor>form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 16px; align-items:start; }
     .setup-editor label { min-width:0; }
+    @container report-form (max-width:880px) {
+      .setup-editor > .report-inline-fields,.report-inline-fields .form-grid { grid-template-columns:minmax(0,1fr); }
+    }
     .report-description,.setup-actions,.cycle-details,.cycle-notice,.cycle-state { grid-column:1/-1; }
     .setup-actions { position:sticky; bottom:0; z-index:1; display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap; padding:12px 0; border-top:1px solid var(--line); background:#fff; }
     .report-optional { padding:10px 12px; border:1px solid var(--line); border-radius:8px; }
@@ -56,7 +59,7 @@ type SetupTab = 'reports' | 'create' | 'profile' | 'components' | 'cycles';
       <app-submission-recipient-admin />
     } @else {
       <section class="report-workspace">
-        <div class="report-tabbar" role="tablist" aria-label="Report setup sections">
+        <div class="report-tabbar" role="tablist" aria-label="Report configuration sections">
           @for (tab of tabs; track tab.id; let i=$index) {
             <button type="button" role="tab" [id]="'setup-tab-'+tab.id" [attr.aria-controls]="'setup-panel-'+tab.id"
               [attr.aria-selected]="activeTab()===tab.id" [attr.tabindex]="activeTab()===tab.id ? 0 : -1"
@@ -94,24 +97,24 @@ type SetupTab = 'reports' | 'create' | 'profile' | 'components' | 'cycles';
           </section>
         </section>
         <section class="setup-tab-panel department-panel" role="tabpanel" id="setup-panel-create" aria-labelledby="setup-tab-create" [hidden]="activeTab()!=='create'">
-            <article class="setup-card setup-editor"><h3>Create report</h3>
-<form #reportForm="ngForm" (ngSubmit)="addReport(reportForm)">
-          <label>Code<input name="code" [(ngModel)]="report.code" required maxlength="40"></label>
-          <label>Report name<input name="name" [(ngModel)]="report.name" required maxlength="150"></label>
-          <label>Coordinating division<select name="ownerDivisionId" [(ngModel)]="report.ownerDivisionId" required><option value="">Choose division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
-          <label>Receiving division<select name="reportReceivingDivision" [(ngModel)]="report.receivingDivisionId" required><option value="">Choose receiving division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
-          <label>Final submitting division<select name="submittingDivisionId" [(ngModel)]="report.submittingDivisionId" (ngModelChange)="report.primarySubmittingOfficerId = ''; report.deputySubmittingOfficerId = ''" required><option value="">Choose final submitting division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
-          <label>Final submitting officer<select name="primarySubmittingOfficerId" [ngModel]="report.primarySubmittingOfficerId" (ngModelChange)="selectFinalSubmitter($event)" required><option value="">Choose officer</option>@for (u of officers(report.submittingDivisionId); track u.id) { <option [value]="u.id">{{ u.name }}</option> }</select></label>
-          <label>Frequency<select name="frequency" [(ngModel)]="report.frequency">@for (f of frequencies; track f) { <option [value]="f">{{ f }}</option> }</select></label>
-          <label>Main deadline time<input name="dueTime" type="time" [(ngModel)]="report.dueTime" required></label>
-          <label>Deadline lead days<input name="componentDeadlineOffsetDays" type="number" min="0" max="365" [(ngModel)]="report.componentDeadlineOffsetDays" required></label>
+            <article class="setup-card setup-editor report-inline-layout"><h3>Create report</h3>
+<form class="report-inline-fields" #reportForm="ngForm" (ngSubmit)="addReport(reportForm)">
+          <label class="report-field"><span>Code</span><input name="code" [(ngModel)]="report.code" required maxlength="40"></label>
+          <label class="report-field"><span>Report name</span><input name="name" [(ngModel)]="report.name" required maxlength="150"></label>
+          <label class="report-field"><span>Coordinating division</span><select name="ownerDivisionId" [(ngModel)]="report.ownerDivisionId" required><option value="">Choose division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
+          <label class="report-field"><span>Receiving division</span><select name="reportReceivingDivision" [(ngModel)]="report.receivingDivisionId" required><option value="">Choose receiving division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
+          <label class="report-field"><span>Final submitting division</span><select name="submittingDivisionId" [(ngModel)]="report.submittingDivisionId" (ngModelChange)="report.primarySubmittingOfficerId = ''; report.deputySubmittingOfficerId = ''" required><option value="">Choose final submitting division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
+          <label class="report-field"><span>Final submitting officer</span><select name="primarySubmittingOfficerId" [ngModel]="report.primarySubmittingOfficerId" (ngModelChange)="selectFinalSubmitter($event)" required><option value="">Choose officer</option>@for (u of officers(report.submittingDivisionId); track u.id) { <option [value]="u.id">{{ u.name }}</option> }</select></label>
+          <label class="report-field"><span>Frequency</span><select name="frequency" [(ngModel)]="report.frequency">@for (f of frequencies; track f) { <option [value]="f">{{ f }}</option> }</select></label>
+          <label class="report-field"><span>Main deadline time</span><input name="dueTime" type="time" [(ngModel)]="report.dueTime" required></label>
+          <label class="report-field"><span>Deadline lead days</span><input name="componentDeadlineOffsetDays" type="number" min="0" max="365" [(ngModel)]="report.componentDeadlineOffsetDays" required></label>
           <app-submission-destination-picker class="report-description" [recipients]="submissionRecipients()" [destination]="report"
             [disabled]="busy()" (destinationChange)="updateReportDestination($event)" />
           <details class="report-optional report-description"><summary>Optional fields</summary>
             <div class="form-grid">
-          <label>Deputy submitting officer (optional)<select name="deputySubmittingOfficerId" [(ngModel)]="report.deputySubmittingOfficerId"><option value="">None</option>@for (u of deputySubmitters(); track u.id) { <option [value]="u.id">{{ u.name }}</option> }</select></label>
-          <label>Instruction reference<input name="instructionReference" [(ngModel)]="report.instructionReference" maxlength="250"></label>
-          <label class="report-description">Description<textarea name="description" [(ngModel)]="report.description" maxlength="1000" rows="2"></textarea></label>
+          <label class="report-field"><span>Deputy submitting officer (optional)</span><select name="deputySubmittingOfficerId" [(ngModel)]="report.deputySubmittingOfficerId"><option value="">None</option>@for (u of deputySubmitters(); track u.id) { <option [value]="u.id">{{ u.name }}</option> }</select></label>
+          <label class="report-field"><span>Instruction reference</span><input name="instructionReference" [(ngModel)]="report.instructionReference" maxlength="250"></label>
+          <label class="report-description report-field"><span>Description</span><textarea name="description" [(ngModel)]="report.description" maxlength="1000" rows="2"></textarea></label>
             </div>
           </details>
           @if (error()) { <div class="error-banner report-description" role="alert">{{ error() }}</div> }
@@ -135,19 +138,19 @@ type SetupTab = 'reports' | 'create' | 'profile' | 'components' | 'cycles';
         </section>
         <section class="setup-tab-panel" role="tabpanel" id="setup-panel-cycles" aria-labelledby="setup-tab-cycles" [hidden]="activeTab()!=='cycles'">
           @if (selectedReport()) {
-            <article class="setup-card setup-editor"><h3>Reporting cycles</h3>
-        <form #cycleForm="ngForm" (ngSubmit)="addCycle(cycleForm)">
+            <article class="setup-card setup-editor report-inline-layout"><h3>Reporting cycles</h3>
+        <form class="report-inline-fields" #cycleForm="ngForm" (ngSubmit)="addCycle(cycleForm)">
             @if (cyclesLoading()) { <p class="cycle-state" role="status">Loading saved reporting cycles…</p> }
             @if (cycleLoadError()) { <div class="error-banner cycle-state" role="alert">{{ cycleLoadError() }} <button type="button" (click)="selectReport(cycle.reportId)">Retry loading cycles</button></div> }
             @if (cycle.reportId && !cyclesLoading() && !cycleLoadError()) {
-              <label>Saved cycle<select name="savedCycleId" [ngModel]="savedCycleId" (ngModelChange)="selectCycle($event)"><option value="">Create a new manual cycle</option>@for (saved of savedCycles(); track saved.id) { <option [value]="saved.id">{{ saved.periodLabel }} ({{ saved.periodKey }})</option> }</select></label>
+              <label class="report-field"><span>Saved cycle</span><select name="savedCycleId" [ngModel]="savedCycleId" (ngModelChange)="selectCycle($event)"><option value="">Create a new manual cycle</option>@for (saved of savedCycles(); track saved.id) { <option [value]="saved.id">{{ saved.periodLabel }} ({{ saved.periodKey }})</option> }</select></label>
               @if (!savedCycleId) { <p class="cycle-notice" role="status">{{ savedCycles().length ? 'Enter a new reporting period below. Existing cycles are available in Saved cycle.' : 'No saved cycles exist for this report. Enter a period to create one manually.' }}</p> }
               <fieldset class="cycle-details" [disabled]="!!savedCycleId">
-              <div class="form-grid"><label>Period key<input name="periodKey" [(ngModel)]="cycle.periodKey" required maxlength="80" placeholder="e.g. 2026-10"></label><label>Period label<input name="periodLabel" [(ngModel)]="cycle.periodLabel" required maxlength="150" placeholder="e.g. October 2026"></label><label>Period start<input name="periodStart" type="date" [(ngModel)]="cycle.periodStart" required></label><label>Period end<input name="periodEnd" type="date" [(ngModel)]="cycle.periodEnd" required></label></div>
-              @if (!savedCycleId && cycleAssignmentsMissing()) { <p class="error-banner" role="alert">Complete the submitting division, assigned officers and recipients in Report Setup and Components and Responsibilities before creating this cycle.</p> }
+              <div class="form-grid"><label class="report-field"><span>Period key</span><input name="periodKey" [(ngModel)]="cycle.periodKey" required maxlength="80" placeholder="e.g. 2026-10"></label><label class="report-field"><span>Period label</span><input name="periodLabel" [(ngModel)]="cycle.periodLabel" required maxlength="150" placeholder="e.g. October 2026"></label><label class="report-field"><span>Period start</span><input name="periodStart" type="date" [(ngModel)]="cycle.periodStart" required></label><label class="report-field"><span>Period end</span><input name="periodEnd" type="date" [(ngModel)]="cycle.periodEnd" required></label></div>
+              @if (!savedCycleId && cycleAssignmentsMissing()) { <p class="error-banner" role="alert">Complete the submitting division, assigned officers and recipients in Report Configuration and Components and Responsibilities before creating this cycle.</p> }
               <div class="form-grid">
               @for (task of tasks; track $index; let i = $index) {
-                <label>{{ task.type === 'BB' ? 'Final submission deadline (Asia/Dhaka)' : task.name + ' deadline (Asia/Dhaka)' }}<input type="datetime-local" [name]="'due'+i" [(ngModel)]="task.dueLocal" required></label>
+                <label class="report-field"><span>{{ task.type === 'BB' ? 'Final submission deadline (Asia/Dhaka)' : task.name + ' deadline (Asia/Dhaka)' }}</span><input type="datetime-local" [name]="'due'+i" [(ngModel)]="task.dueLocal" required></label>
               }
               </div>
               @if (!savedCycleId) { <div class="setup-actions"><button class="primary" type="submit" [disabled]="busy() || cycleForm.invalid || cycleAssignmentsMissing()">Create cycle manually</button></div> }</fieldset>
@@ -162,8 +165,8 @@ type SetupTab = 'reports' | 'create' | 'profile' | 'components' | 'cycles';
 })
 export class WorkspaceSetupComponent implements OnInit, OnDestroy {
   protected readonly tabs: {id:SetupTab; label:string}[] = [
-    {id:'reports',label:'Reports'}, {id:'profile',label:'Report profile'},
-    {id:'components',label:'Components'}, {id:'cycles',label:'Reporting cycles'}, {id:'create',label:'Create report'}
+    {id:'reports',label:'Directory'}, {id:'create',label:'Create'}, {id:'cycles',label:'Cycles'},
+    {id:'components',label:'Components'}, {id:'profile',label:'Profile'}
   ];
   protected readonly activeTab = signal<SetupTab>('reports');
   protected readonly selectedReportId = signal('');

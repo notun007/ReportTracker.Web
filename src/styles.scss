@@ -136,11 +136,65 @@ label.checkbox { display:flex; flex-direction:row; align-items:center; gap:8px; 
 .modal.destination-dialog { width:min(1000px,calc(100% - 24px)); max-height:92dvh; }
 .destination-dialog .modal-actions { position:sticky; bottom:0; z-index:1; flex-wrap:wrap; background:#fff; padding:10px 0; }
 
-/* Report setup workspace */
-.report-tabbar { display:flex; flex-wrap:wrap; gap:4px; border-bottom:1px solid var(--line); }
-.report-tabbar button { min-height:42px; padding:8px 16px; background:transparent; border:0; border-bottom:3px solid transparent; color:var(--muted); font-weight:600; }
-.report-tabbar button[aria-selected=true] { color:var(--navy); border-bottom-color:var(--blue); background:#eaf4ff; border-radius:8px 8px 0 0; }
-.report-tabbar button:hover { color:var(--navy); background:#eef5fc; }
+/* Report configuration workspace */
+.report-inline-layout { container:report-form / inline-size; }
+.report-inline-fields { --report-field-columns:10rem minmax(0,1fr); --report-field-gap:12px; }
+.report-inline-fields .report-field {
+  display:grid;
+  grid-template-columns:var(--report-field-columns);
+  gap:6px var(--report-field-gap);
+  align-items:center;
+  min-width:0;
+}
+.report-field > :is(input,select,textarea) { width:100%; min-width:0; }
+.report-field > span { line-height:1.35; }
+@container report-form (max-width:440px) {
+  .report-inline-fields { --report-field-columns:minmax(0,1fr); }
+}
+
+
+.report-tabbar {
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px;
+  width:100%;
+  padding:5px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:linear-gradient(180deg,#f7faff,#eaf1f9);
+  box-shadow:inset 0 1px 2px #1639560a,0 2px 6px #173b6110;
+}
+.report-tabbar button {
+  position:relative;
+  flex:0 0 min(128px,calc((100% - 16px) / 5));
+  min-width:0;
+  min-height:42px;
+  padding:8px clamp(6px,1.2vw,16px);
+  border:1px solid transparent;
+  border-radius:8px;
+  background:transparent;
+  color:#34516f;
+  font-size:13px;
+  font-weight:600;
+  white-space:nowrap;
+  cursor:pointer;
+}
+.report-tabbar button:hover {
+  border-color:#d3e1ef;
+  background:#fff;
+  color:var(--navy);
+}
+.report-tabbar button[aria-selected=true] {
+  border-color:#79a9d3;
+  background:linear-gradient(180deg,#c5dff5,#a4ccee);
+  color:#134775;
+  box-shadow:0 1px 3px #17457529;
+}
+.report-tabbar button:focus-visible {
+  z-index:1;
+  outline:2px solid #1769ae;
+  outline-offset:2px;
+}
 .report-context { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:end; padding:10px 0; }
 .report-context label { display:grid; gap:4px; min-width:0; width:min(420px,100%); font-size:12px; font-weight:600; }
 .report-context select { width:100%; min-width:0; min-height:36px; border:1px solid var(--control-line); border-radius:8px; padding:6px 10px; color:var(--ink); background:#fff; }
@@ -156,6 +210,6 @@ label.checkbox { display:flex; flex-direction:row; align-items:center; gap:8px; 
 .report-row-actions button { white-space:nowrap; }
 .setup-empty { padding:16px; color:var(--muted); }
 @media(max-width:640px) {
-  .report-tabbar button { padding:7px 10px; font-size:12px; }
+  .report-tabbar button { flex:1 0 auto; padding:7px 6px; font-size:12px; }
   .setup-tab-panel { max-height:none; overflow:visible; }
 }
