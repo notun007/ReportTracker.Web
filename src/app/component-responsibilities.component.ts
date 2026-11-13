@@ -24,25 +24,19 @@ import { DashboardService, apiError } from './dashboard.service';
           <label>Description<textarea name="description" [(ngModel)]="form.description" maxlength="1000" rows="3"></textarea></label>
           <div class="form-grid">
             <label>Preparing division<select name="providerDivisionId" [(ngModel)]="form.providerDivisionId" (ngModelChange)="form.contributors=[]" required><option value="">Choose division</option>@for (division of lookups().divisions; track division.id) { <option [value]="division.id">{{ division.name }}</option> }</select></label>
-            <label>Display order<input name="sequence" type="number" min="0" max="999" [(ngModel)]="form.sequence" required></label>
           </div>
           <app-component-contributors [rows]="form.contributors" [members]="officers(form.providerDivisionId)" [disabled]="saving()" (rowsChange)="form.contributors=$event" />
           @if (form.providerDivisionId && officers(form.providerDivisionId).length === 0) {
             <div class="error-banner" role="status">No active team members are assigned to {{ divisionName(form.providerDivisionId) }}. Ask a System Administrator to create users for this division under Administration → Add user. <button type="button" (click)="refreshOfficers()" [disabled]="refreshingOfficers()">{{ refreshingOfficers() ? 'Refreshing…' : 'Refresh team members' }}</button></div>
           }
-          <div class="check-grid">
-            <label class="checkbox"><input type="checkbox" name="required" [(ngModel)]="form.isRequired">Mandatory for readiness</label>
-            <label class="checkbox"><input type="checkbox" name="evidence" [(ngModel)]="form.evidenceRequired">Evidence required</label>
-            <label class="checkbox"><input type="checkbox" name="receipt" [(ngModel)]="form.receiptRequired">Receipt confirmation required</label>
-          </div>
           <button class="primary" type="submit" [disabled]="saving() || componentForm.invalid || !reportId || !reportReceiver()">{{ saving() ? 'Saving…' : 'Add component' }}</button>
         </form>
       </aside>
       <section class="tracker-panel component-list">
         <div class="panel-heading"><div><h3>Configured components</h3><span>{{ components().length }} components in the selected report definition</span></div><button class="secondary" type="button" (click)="loadComponents()" [disabled]="!reportId || loadingComponents() || saving()">Refresh components</button></div>
-        <div class="table-wrap"><table><thead><tr><th>Component</th><th>Preparing division</th><th>Component contributors</th><th>Deadline</th><th>Controls</th></tr></thead><tbody>
-          @for (component of components(); track component.id) { <tr><td><strong>{{ component.name }}</strong><span>{{ component.description || (component.isRequired ? 'Mandatory component' : 'Optional component') }}</span></td><td>{{ divisionName(component.providerDivisionId) }}</td><td>@for (member of contributorRows(component); track member.userId) { <span>{{ teamMemberName(member.userId) }} · {{ contributorRoleNames(member) }}</span> } @empty { Unassigned }</td><td>{{ component.deadlineOffsetDays }} day(s) before main deadline</td><td><span>{{ component.evidenceRequired ? 'Evidence' : 'No evidence' }}</span><span>{{ component.receiptRequired ? 'Receipt confirmation' : 'No receipt confirmation' }}</span></td></tr> }
-          @empty { <tr><td colspan="5" class="empty">{{ loadingComponents() ? 'Loading components…' : reportId ? 'No components have been added to this report.' : 'Choose a report to view its components.' }}</td></tr> }
+        <div class="table-wrap"><table><thead><tr><th>Component</th><th>Preparing division</th><th>Component contributors</th><th>Deadline</th></tr></thead><tbody>
+          @for (component of components(); track component.id) { <tr><td><strong>{{ component.name }}</strong><span>{{ component.description }}</span></td><td>{{ divisionName(component.providerDivisionId) }}</td><td>@for (member of contributorRows(component); track member.userId) { <span>{{ teamMemberName(member.userId) }} · {{ contributorRoleNames(member) }}</span> } @empty { Unassigned }</td><td>{{ component.deadlineOffsetDays }} day(s) before main deadline</td></tr> }
+          @empty { <tr><td colspan="4" class="empty">{{ loadingComponents() ? 'Loading components…' : reportId ? 'No components have been added to this report.' : 'Choose a report to view its components.' }}</td></tr> }
         </tbody></table></div>
       </section>
     </section>
@@ -97,9 +91,9 @@ export class ComponentResponsibilitiesComponent implements OnInit {
     if (validation) { this.error.set(validation); return; }
     this.saving.set(true); this.error.set(''); this.message.set('');
     this.api.createComponent(this.reportId, { ...this.form, contributors:flattenContributors(this.form.contributors), receivingDivisionId: this.reportReceiver() }).subscribe({
-      next: row => { this.components.update(rows => [...rows, row].sort((a, b) => a.sequence - b.sequence)); this.form = this.emptyForm(); form.resetForm({ ...this.form, reportId: this.reportId }); this.message.set('Component saved. This defines an input for reporting cycles; existing cycles are unchanged.'); this.saving.set(false); },
+      next: row => { this.components.update(rows => [...rows, row].sort((a, b) => a.name.localeCompare(b.name))); this.form = this.emptyForm(); form.resetForm({ ...this.form, reportId: this.reportId }); this.message.set('Component saved. This defines an input for reporting cycles; existing cycles are unchanged.'); this.saving.set(false); },
       error: error => { this.error.set(apiError(error)); this.saving.set(false); }
     });
   }
-  private emptyForm() { return { name: '', description: '', isRequired: true, sequence: 0, providerDivisionId: '', contributors: [] as ContributorSelection[], receiptRequired: false, evidenceRequired: false }; }
+  private emptyForm() { return { name: '', description: '', providerDivisionId: '', contributors: [] as ContributorSelection[] }; }
 }

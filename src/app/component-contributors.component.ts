@@ -7,24 +7,22 @@ import { ContributorRolePickerComponent, formatContributorRoles } from './contri
 export interface ContributorSelection {
   userId: string;
   roles: ContributorRole[];
-  recordsHandover: boolean;
 }
 
 export function flattenContributors(rows: ContributorSelection[]): ComponentContributor[] {
-  return rows.flatMap(row => row.roles.map(role => ({userId:row.userId, role, recordsHandover:row.recordsHandover})));
+  return rows.flatMap(row => row.roles.map(role => ({userId:row.userId, role})));
 }
 
 export function contributorRows(row: ComponentDefinition): ContributorSelection[] {
   const entries = row.contributors ?? [
-    ...(row.primaryOfficerId ? [{userId:row.primaryOfficerId, role:'LeadPreparer' as const, recordsHandover:true}] : []),
+    ...(row.primaryOfficerId ? [{userId:row.primaryOfficerId, role:'LeadPreparer' as const}] : []),
     ...(row.deputyOfficerId && row.deputyOfficerId !== row.primaryOfficerId
-      ? [{userId:row.deputyOfficerId, role:'BackupPreparer' as const, recordsHandover:true}] : [])
+      ? [{userId:row.deputyOfficerId, role:'BackupPreparer' as const}] : [])
   ];
   const grouped = new Map<string, ContributorSelection>();
   for (const entry of entries) {
-    const selection = grouped.get(entry.userId) ?? {userId:entry.userId, roles:[], recordsHandover:false};
+    const selection = grouped.get(entry.userId) ?? {userId:entry.userId, roles:[]};
     if (!selection.roles.includes(entry.role)) selection.roles.push(entry.role);
-    selection.recordsHandover ||= entry.recordsHandover;
     grouped.set(entry.userId, selection);
   }
   return [...grouped.values()];
@@ -40,8 +38,7 @@ export function contributorError(rows: ContributorSelection[], members: Lookup[]
   if (new Set(rows.map(row => row.userId)).size !== rows.length) return 'Choose a different team member for each row.';
   if (rows.some(row => !row.roles.length)) return 'Choose at least one role for each team member.';
   if (rows.filter(row => row.roles.includes('LeadPreparer')).length !== 1) return 'Choose exactly one lead preparer.';
-  const handover = rows.filter(row => row.recordsHandover).length;
-  return handover < 1 || handover > 2 ? 'Choose one or two team members to record the handover.' : '';
+  return '';
 }
 
 @Component({
@@ -55,27 +52,24 @@ export function contributorError(rows: ContributorSelection[], members: Lookup[]
     label { display:grid; gap:5px; min-width:0; font-size:12px; font-weight:600; }
     select { width:100%; min-width:0; min-height:40px; padding:8px; border:1px solid var(--control-line); border-radius:8px; background:var(--control-fill); color:var(--ink); }
     .remove { justify-self:end; min-height:40px; }
-    .handover { grid-column:1/-1; }
     .add { justify-self:start; }
     .automatic .contributor-row { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 16px; }
     .automatic .contributor-row:last-child { border-bottom:0; padding-bottom:0; }
     .automatic app-contributor-role-picker { --contributor-role-columns:var(--report-field-columns); }
-    .automatic .handover { grid-column:1; grid-row:2; display:flex; align-items:center; gap:8px; }
-    .automatic .handover input { width:16px; height:16px; min-height:16px; margin:0; padding:0; accent-color:var(--blue); }
     .automatic .remove { grid-column:2; grid-row:2; min-height:30px; }
     @container report-form (max-width:880px) {
       .automatic .contributor-row { grid-template-columns:minmax(0,1fr); }
-      .automatic .handover,.automatic .remove { grid-column:1; grid-row:auto; }
+      .automatic .remove { grid-column:1; grid-row:auto; }
     }
     @media(max-width:480px) {
       .automatic .contributor-row { grid-template-columns:minmax(0,1fr); }
-      .automatic .handover,.automatic .remove { grid-column:1; grid-row:auto; }
+      .automatic .remove { grid-column:1; grid-row:auto; }
     }
     @media(max-width:560px) { .contributor-row { grid-template-columns:minmax(0,1fr) minmax(0,1fr); } .remove { grid-column:1/-1; grid-row:auto; min-height:30px; } }
   `],
   template: `
     <fieldset [disabled]="disabled()" [class.automatic]="automaticRows()">
-      <legend>Component contributors</legend>
+      @if (!automaticRows()) { <legend>Component contributors</legend> }
       @for (row of displayedRows(); track $index; let i = $index) {
         <div class="contributor-row">
           <label class="report-field"><span>Team member</span>
@@ -87,7 +81,6 @@ export function contributorError(rows: ContributorSelection[], members: Lookup[]
           </label>
           <app-contributor-role-picker [roles]="row.roles" [disabled]="automaticRows() && !row.userId" (rolesChange)="update(i,{roles:$event})" />
           @if (!automaticRows() || row.userId) { <button class="link-button remove" type="button" (click)="remove(i)" [attr.aria-label]="'Remove contributor '+(i+1)">Remove</button> }
-          <label class="checkbox handover"><input type="checkbox" [checked]="row.recordsHandover" [disabled]="automaticRows() && !row.userId" (change)="update(i,{recordsHandover:$any($event.target).checked})">Records handover</label>
         </div>
       }
       @if (!automaticRows()) { <button class="secondary add" type="button" (click)="add()" [disabled]="rows().length >= 50 || rows().length >= members().length">Add contributor</button> }
@@ -121,7 +114,7 @@ export class ComponentContributorsComponent {
   }
   private blankRow(): ContributorSelection {
     const first = !this.rows().length;
-    return { userId: '', roles: [first ? 'LeadPreparer' : 'Preparer'], recordsHandover: first };
+    return { userId: '', roles: [first ? 'LeadPreparer' : 'Preparer'] };
   }
   protected add() {
     this.rowsChange.emit([...this.rows(), this.blankRow()]);

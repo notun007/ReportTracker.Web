@@ -129,23 +129,19 @@ function loadRows<T>(reportId: string, request: Observable<T[]>) {
               <details class="entry component-entry">
                 <summary>
                   <span><strong>{{ component.name }}</strong>
-                    <span class="entry-caption">{{ divisionName(component.providerDivisionId) }} · {{ component.isRequired ? 'Mandatory' : 'Optional' }}</span>
+                    <span class="entry-caption">{{ divisionName(component.providerDivisionId) }}</span>
                   </span>
                 </summary>
                 <div class="entry-body">
                   <dl class="fields report-inline-fields">
                     <div class="field report-field"><dt>Preparing division</dt><dd>{{ divisionName(component.providerDivisionId) }}</dd></div>
                     <div class="field report-field"><dt>Receiving division</dt><dd>{{ divisionName(component.receivingDivisionId) }}</dd></div>
-                    <div class="field report-field"><dt>Display order</dt><dd>{{ component.sequence }}</dd></div>
                     <div class="field report-field"><dt>Lead days</dt><dd>{{ component.deadlineOffsetDays }}</dd></div>
-                    <div class="field report-field"><dt>Receipt confirmation</dt><dd>{{ component.receiptRequired ? 'Required' : 'Not required' }}</dd></div>
-                    <div class="field report-field"><dt>Confirmation evidence</dt><dd>{{ component.evidenceRequired ? 'Required' : 'Not required' }}</dd></div>
                     <div class="field report-field full"><dt>Contributors</dt><dd class="contributor-value">
                       <ul class="contributors">
                         @for (contributor of component.contributors; track contributor.userId) {
                           <li><strong>{{ memberName(contributor.userId) }}</strong>
                             <span class="entry-caption">{{ roleNames(contributor) }}</span>
-                            @if (contributor.recordsHandover) { <span class="entry-caption">Records handover</span> }
                           </li>
                         } @empty { <li>Unassigned</li> }
                       </ul>
@@ -178,7 +174,7 @@ export class ReportProfileComponent {
     this.api.cycles(id).pipe(map(cycles => [...cycles].sort((a, b) => b.periodStart.localeCompare(a.periodStart) || a.periodKey.localeCompare(b.periodKey))))
   ))));
   protected readonly componentState = toSignal(this.reportIdChanges.pipe(switchMap(id => loadRows(id,
-    this.api.components(id).pipe(map(components => [...components].sort((a, b) => a.sequence - b.sequence)
+    this.api.components(id).pipe(map(components => [...components].sort((a, b) => a.name.localeCompare(b.name))
       .map(component => ({ ...component, contributors: contributorRows(component) }))))
   ))));
 

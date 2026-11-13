@@ -4,7 +4,7 @@ import { ContributorSelection, contributorRoleNames } from './component-contribu
 
 import { ContributorRolePickerComponent } from './contributor-role-picker.component';
 
-const emptyEntry = (): ContributorSelection => ({ userId: '', roles: [], recordsHandover: false });
+const emptyEntry = (): ContributorSelection => ({ userId: '', roles: [] });
 
 @Component({
   selector: 'app-contributor-assignment-table',
@@ -13,9 +13,7 @@ const emptyEntry = (): ContributorSelection => ({ userId: '', roles: [], records
     :host { display:block; }
     fieldset { margin:0 0 20px; border:1px solid var(--line); border-radius:10px; min-width:0; padding:14px; }
     .entry-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 16px; align-items:start; }
-    label.entry-check { display:flex; flex-direction:row; align-items:center; gap:8px; cursor:pointer; }
-    .entry-check input { flex:none; width:16px; height:16px; min-height:16px; padding:0; margin:0; accent-color:var(--blue); }
-    .entry-actions { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+    .entry-actions { grid-column:1/-1; display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
     .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:10px; }
     h3 { margin:0 0 8px; font-size:16px; }
     table { width:100%; min-width:530px; border-collapse:collapse; font-size:13px; }
@@ -39,12 +37,8 @@ const emptyEntry = (): ContributorSelection => ({ userId: '', roles: [], records
           </select>
         </label>
         <app-contributor-role-picker [roles]="entry().roles" (rolesChange)="setRoles($event)" />
-        <label class="entry-check">
-          <input #handover type="checkbox" [checked]="entry().recordsHandover" (change)="setHandover(handover.checked)">
-          Records handover
-        </label>
         <div class="entry-actions">
-          @if (entry().userId || entry().roles.length || entry().recordsHandover) {
+          @if (entry().userId || entry().roles.length) {
             <button type="button" class="secondary" (click)="clear(); memberSelect.focus()">Clear</button>
           }
           <button type="button" class="primary" [disabled]="!canApply()" (click)="apply(); memberSelect.focus()">
@@ -61,14 +55,13 @@ const emptyEntry = (): ContributorSelection => ({ userId: '', roles: [], records
     <div class="table-wrap" tabindex="0" role="region" aria-label="Contributor table">
       <table aria-label="Contributors">
         <thead>
-          <tr><th scope="col">Team member</th><th scope="col">Contributor roles</th><th scope="col">Records handover</th><th scope="col">Actions</th></tr>
+          <tr><th scope="col">Team member</th><th scope="col">Contributor roles</th><th scope="col">Actions</th></tr>
         </thead>
         <tbody>
           @for (row of rows(); track row.userId) {
             <tr>
               <td>{{ memberName(row.userId) }}</td>
               <td>{{ roleNames(row) }}</td>
-              <td>{{ row.recordsHandover ? 'Yes' : 'No' }}</td>
               <td>
                 <div class="row-actions">
                   <button type="button" class="link-button" [disabled]="disabled() || !hasMember(row.userId)"
@@ -79,7 +72,7 @@ const emptyEntry = (): ContributorSelection => ({ userId: '', roles: [], records
               </td>
             </tr>
           } @empty {
-            <tr><td colspan="4">No contributors added.</td></tr>
+            <tr><td colspan="3">No contributors added.</td></tr>
           }
         </tbody>
       </table>
@@ -97,11 +90,10 @@ export class ContributorAssignmentTableComponent {
 
   protected readonly existing = computed(() => this.rows().find(row => row.userId === this.entry().userId));
   readonly hasPendingEntry = computed(() => {
-    const { userId, roles, recordsHandover } = this.entry();
+    const { userId, roles } = this.entry();
     const existing = this.existing();
-    if (!existing) return !!userId || roles.length > 0 || recordsHandover;
-    return recordsHandover !== existing.recordsHandover ||
-      roles.length !== existing.roles.length || roles.some(role => !existing.roles.includes(role));
+    if (!existing) return !!userId || roles.length > 0;
+    return roles.length !== existing.roles.length || roles.some(role => !existing.roles.includes(role));
   });
   protected readonly canApply = computed(() =>
     this.hasMember(this.entry().userId) && this.entry().roles.length > 0 &&
@@ -123,10 +115,6 @@ export class ContributorAssignmentTableComponent {
 
   protected setRoles(roles: ContributorSelection['roles']) {
     this.entry.update(entry => ({ ...entry, roles }));
-  }
-
-  protected setHandover(recordsHandover: boolean) {
-    this.entry.update(entry => ({ ...entry, recordsHandover }));
   }
 
   protected apply() {

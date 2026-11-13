@@ -30,12 +30,12 @@ export interface ReportDefinition {
   submissionRecipientId?: string | null; submissionDepartmentIds?: string[]; submissionDestination?: string; id: string; code: string; name: string; ownerDivisionId: string; bbRecipient: string; frequency: string; cycleCount: number; receivingDivisionId: string | null; submittingDivisionId: string | null; primarySubmittingOfficerId: string | null; deputySubmittingOfficerId: string | null; }
 export interface UserItem { id: string; displayName: string; email: string; mobileNumber: string | null; employeeId: string; divisionId: string; isActive: boolean; roles: string[]; }
 export type ContributorRole = 'LeadPreparer' | 'Preparer' | 'BackupPreparer' | 'Reviewer';
-export interface ComponentContributor { userId: string; role: ContributorRole; recordsHandover: boolean; }
+export interface ComponentContributor { userId: string; role: ContributorRole; }
 export interface ComponentDefinition {
   contributors?: ComponentContributor[];
-  id: string; definitionVersionId: string; name: string; description: string | null; isRequired: boolean; sequence: number;
+  id: string; definitionVersionId: string; name: string; description: string | null;
   providerDivisionId: string; primaryOfficerId: string | null; deputyOfficerId: string | null; receivingDivisionId: string;
-  receiptRequired: boolean; evidenceRequired: boolean; deadlineOffsetDays: number;
+  deadlineOffsetDays: number;
 }
 export interface ReadinessComponent {
   id: string; name: string; division: string; owner: string; dueAtUtc: string; timeliness: string;

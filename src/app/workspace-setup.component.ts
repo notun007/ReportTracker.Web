@@ -14,6 +14,7 @@ type SetupTab = 'reports' | 'create' | 'profile' | 'components' | 'cycles';
   selector: 'app-workspace-setup', imports: [FormsModule, ReportComponentEditorComponent, ReportProfileComponent, SubmissionDestinationPickerComponent],
   styles: [`
     .cycle-details { display:grid; gap:14px; min-width:0; margin:0; padding:0; border:0; }
+    .cycle-create-action { justify-self:end; }
     .cycle-notice { margin:0; color:var(--muted); }
     .setup-editor { padding:18px 22px 0; border:0; border-radius:0; box-shadow:none; }
     .setup-editor h3 { margin:0 0 14px; }
@@ -36,24 +37,27 @@ type SetupTab = 'reports' | 'create' | 'profile' | 'components' | 'cycles';
     @if (loading()) { <p class="loading">Loading workspace setup…</p> }
     @else {
       <section class="report-workspace">
-        <div class="report-tabbar" role="tablist" aria-label="Report configuration sections">
-          @for (tab of tabs; track tab.id; let i=$index) {
-            <button type="button" role="tab" [id]="'setup-tab-'+tab.id" [attr.aria-controls]="'setup-panel-'+tab.id"
-              [attr.aria-selected]="activeTab()===tab.id" [attr.tabindex]="activeTab()===tab.id ? 0 : -1"
-              (click)="selectTab(tab.id)" (keydown)="onTabKey($event,i)">{{ tab.label }}</button>
-          }
-        </div>
-        <div class="report-context">
-          @if (activeTab()==='create') {
-            <span class="report-context-meta">New report</span>
-          } @else {
-          <label>Selected report
-            <select name="workspaceReport" [ngModel]="selectedReportId()" (ngModelChange)="chooseReport($event)" [disabled]="workspaceBusy()">
-              <option value="">Choose report</option>
-              @for (r of reports(); track r.id) { <option [value]="r.id">{{ r.code }} — {{ r.name }}</option> }
-            </select>
-          </label>
-          @if (selectedReport(); as selected) { <span class="report-context-meta">{{ selected.frequency }} · {{ selected.cycleCount }} {{ selected.cycleCount === 1 ? 'cycle' : 'cycles' }}</span> }
+        <div class="report-tabbar report-toolbar">
+          <div class="report-tabs" role="tablist" aria-label="Report configuration sections">
+            @for (tab of tabs; track tab.id; let i=$index) {
+              <button type="button" role="tab" [id]="'setup-tab-'+tab.id" [attr.aria-controls]="'setup-panel-'+tab.id"
+                [attr.aria-selected]="activeTab()===tab.id" [attr.tabindex]="activeTab()===tab.id ? 0 : -1"
+                (click)="selectTab(tab.id)" (keydown)="onTabKey($event,i)">{{ tab.label }}</button>
+            }
+          </div>
+          @if (activeTab() !== 'create') {
+            <div class="report-context">
+              <label>
+                <span class="sr-only">Selected report</span>
+                <select name="workspaceReport" [ngModel]="selectedReportId()" (ngModelChange)="chooseReport($event)" [disabled]="workspaceBusy()">
+                  <option value="">Choose report</option>
+                  @for (r of reports(); track r.id) { <option [value]="r.id">{{ r.code }} — {{ r.name }}</option> }
+                </select>
+              </label>
+              @if (selectedReport(); as selected) {
+                <span class="report-context-meta">{{ selected.frequency }} · {{ selected.cycleCount }} {{ selected.cycleCount === 1 ? 'cycle' : 'cycles' }}</span>
+              }
+            </div>
           }
         </div>
         <section class="setup-tab-panel" role="tabpanel" id="setup-panel-reports" aria-labelledby="setup-tab-reports" [hidden]="activeTab()!=='reports'">
@@ -121,6 +125,9 @@ type SetupTab = 'reports' | 'create' | 'profile' | 'components' | 'cycles';
             @if (cycleLoadError()) { <div class="error-banner cycle-state" role="alert">{{ cycleLoadError() }} <button type="button" (click)="selectReport(cycle.reportId)">Retry loading cycles</button></div> }
             @if (cycle.reportId && !cyclesLoading() && !cycleLoadError()) {
               <label class="report-field"><span>Saved cycle</span><select name="savedCycleId" [ngModel]="savedCycleId" (ngModelChange)="selectCycle($event)"><option value="">Create a new manual cycle</option>@for (saved of savedCycles(); track saved.id) { <option [value]="saved.id">{{ saved.periodLabel }} ({{ saved.periodKey }})</option> }</select></label>
+              @if (savedCycleId) {
+                <button class="secondary cycle-create-action" type="button" [disabled]="busy()" (click)="selectCycle('')">Create a new manual cycle</button>
+              }
               @if (!savedCycleId) { <p class="cycle-notice" role="status">{{ savedCycles().length ? 'Enter a new reporting period below. Existing cycles are available in Saved cycle.' : 'No saved cycles exist for this report. Enter a period to create one manually.' }}</p> }
               <fieldset class="cycle-details" [disabled]="!!savedCycleId">
               <div class="form-grid"><label class="report-field"><span>Period key</span><input name="periodKey" [(ngModel)]="cycle.periodKey" required maxlength="80" placeholder="e.g. 2026-10"></label><label class="report-field"><span>Period label</span><input name="periodLabel" [(ngModel)]="cycle.periodLabel" required maxlength="150" placeholder="e.g. October 2026"></label><label class="report-field"><span>Period start</span><input name="periodStart" type="date" [(ngModel)]="cycle.periodStart" required></label><label class="report-field"><span>Period end</span><input name="periodEnd" type="date" [(ngModel)]="cycle.periodEnd" required></label></div>
@@ -130,6 +137,10 @@ type SetupTab = 'reports' | 'create' | 'profile' | 'components' | 'cycles';
                 <label class="report-field"><span>{{ task.type === 'BB' ? 'Final submission deadline (Asia/Dhaka)' : task.name + ' deadline (Asia/Dhaka)' }}</span><input type="datetime-local" [name]="'due'+i" [(ngModel)]="task.dueLocal" required></label>
               }
               </div>
+              @if (savedCycleId) {
+                @if (!tasks.length) { <p class="cycle-notice">No tasks were saved for this cycle.</p> }
+                @else if (!hasSavedComponentTasks()) { <p class="cycle-notice">No component tasks were saved for this cycle.</p> }
+              }
               @if (!savedCycleId) { <div class="setup-actions"><button class="primary" type="submit" [disabled]="busy() || cycleForm.invalid || cycleAssignmentsMissing()">Create cycle manually</button></div> }</fieldset>
             }
           </form>
@@ -207,7 +218,7 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
     this.cycle = { reportId: this.cycle.reportId, periodKey: saved.periodKey, periodLabel: saved.periodLabel, periodStart: saved.periodStart, periodEnd: saved.periodEnd };
     this.tasks = saved.obligations.map(task => ({ ...task, receivingDivisionId: task.receivingDivisionId ?? '', primaryOfficerId: task.primaryOfficerId ?? '', deputyOfficerId: task.deputyOfficerId ?? '',
       primaryOfficerName: task.primaryOfficerName ?? 'Unassigned', deputyOfficerName: task.deputyOfficerName ?? '',
-      dueLocal: new Date(new Date(task.dueAtUtc).getTime() + 6 * 60 * 60 * 1000).toISOString().slice(0, 16) }));
+      dueLocal: this.dhakaInputValue(task.dueAtUtc) }));
   }
   private resetCycleDraft() {
     const report = this.reports().find(r => r.id === this.cycle.reportId);
@@ -219,6 +230,16 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
     }
     this.tasks = [task];
   }
+  protected hasSavedComponentTasks() {
+    return this.tasks.some(task => task.type === 'Internal');
+  }
+
+  private dhakaInputValue(utc: string): string {
+    // SQL Server can return UTC timestamps without a timezone suffix.
+    const timestamp = Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(utc) ? utc : utc + 'Z');
+    return Number.isFinite(timestamp) ? new Date(timestamp + 6 * 60 * 60 * 1000).toISOString().slice(0, 16) : '';
+  }
+
   protected cycleAssignmentsMissing() { return this.tasks.some(task=>!task.divisionId || !task.primaryOfficerId || !this.hasOfficer(task.divisionId,task.primaryOfficerId) || !task.recipient.trim() || (task.deputyOfficerId && !this.hasOfficer(task.divisionId,task.deputyOfficerId)) || (task.type==='Internal' && task.receiptRequired && !task.receivingDivisionId)); }
   protected divisionName(id: string | null) { return this.lookups().divisions.find(d => d.id === id)?.name ?? 'Not configured'; }
   protected workspaceBusy() { return this.busy() || (this.componentEditor()?.isSaving() ?? false); }
