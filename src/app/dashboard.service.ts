@@ -1,7 +1,7 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { catchError, switchMap, tap, throwError } from 'rxjs';
-import { DivisionItem, ComponentContributor, Lookup, SubmissionDestination, SubmissionRecipient, ObligationActions, ReceiptItem, ReportingCycle, DashboardSummary, SendingRecord, SendingHistory, SessionResponse, SessionUser, Lookups, ReportDefinition, UserItem, ComponentDefinition, SubmissionReadiness, EvidenceItem, ExtensionItem, ReminderPolicy, NotificationItem, CalendarItem, ManagementAnalytics } from './dashboard.models';
+import { WeeklyPresetPeriod, ReportingFrequencyItem, SchedulePresetDirectory, SchedulePresetItem, SchedulePresetPeriod, DivisionItem, ComponentContributor, Lookup, SubmissionDestination, SubmissionRecipient, ObligationActions, ReceiptItem, ReportingCycle, DashboardSummary, SendingRecord, SendingHistory, SessionResponse, SessionUser, Lookups, ReportDefinition, UserItem, ComponentDefinition, SubmissionReadiness, EvidenceItem, ExtensionItem, ReminderPolicy, NotificationItem, CalendarItem, ManagementAnalytics } from './dashboard.models';
 
 export function apiError(error: unknown): string {
   if (error instanceof HttpErrorResponse) {
@@ -42,6 +42,14 @@ export class DashboardService {
   setReportResponsibilities(id:string,body:unknown) { return this.http.put<void>(`/api/setup/reports/${id}/responsibilities`,body); }
   cycles(id: string) { return this.http.get<ReportingCycle[]>(`/api/setup/reports/${id}/cycles`); }
   createCycle(id: string, body: unknown) { return this.http.post(`/api/setup/reports/${id}/cycles`, body); }
+  reportingFrequencies() { return this.http.get<ReportingFrequencyItem[]>('/api/setup/reporting-frequencies'); }
+  schedulePresets() { return this.http.get<SchedulePresetDirectory>('/api/setup/schedule-presets'); }
+  previewSchedulePreset(ruleCode: string, month: string) {
+    return this.http.get<SchedulePresetPeriod[]>('/api/setup/schedule-presets/preview', { params: { ruleCode, month } });
+  }
+  createSchedulePreset(ruleCode: string, weeklyPeriods?: WeeklyPresetPeriod[]) {
+    return this.http.post<SchedulePresetItem>('/api/setup/schedule-presets', { ruleCode, weeklyPeriods });
+  }
   divisions() { return this.http.get<DivisionItem[]>('/api/setup/divisions'); }
   users() { return this.http.get<UserItem[]>('/api/setup/users'); }
   createUser(body: unknown) { return this.http.post('/api/setup/users', body); }

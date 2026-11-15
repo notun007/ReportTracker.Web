@@ -71,3 +71,9 @@ export interface ObligationActions {
   canAssignReceiver:boolean; receivingDivisions:Lookup[];
 }
 export interface ReceiptItem { id:string; sendingEventId:string; receivedAtUtc:string; isDisputed:boolean; reason:string|null; recordedAtUtc:string; actor:string; }
+export interface ReportingFrequencyItem { id:number; code:string; name:string; displayOrder:number; }
+export interface SchedulePresetRule { code:string; name:string; reportingPeriod:string; finalDeadline:string; }
+export interface WeeklyPresetPeriod { startDay:number; endDay:number | null; startMonth?:number | null; endMonth?:number | null; }
+export interface SchedulePresetItem { id:string; ruleCode:string; name:string; version:number; displayOrder:number; reportingPeriod:string; finalDeadline:string; weeklyPeriods?:WeeklyPresetPeriod[] | null; }
+export interface SchedulePresetDirectory { rules:SchedulePresetRule[]; saved:SchedulePresetItem[]; }
+export interface SchedulePresetPeriod { periodStart:string; periodEnd:string; finalDeadline:string; }

@@ -5,6 +5,9 @@
   }
 </nav>
 
+@if (active() === 'schedules') {
+  <app-schedule-presets (notification)="notify($event.text, $event.error)" />
+} @else {
 <section class="setup-card entry-card report-inline-layout" aria-labelledby="admin-entry-title">
   <h2 id="admin-entry-title">{{ screen().title }}</h2>
   @if (loadError()) {
@@ -144,6 +147,8 @@
     </table>
   </div>
 </section>
+
+}
 
 @if (toast(); as message) {
   <div class="toast admin-toast" [class.error-toast]="message.error" [attr.role]="message.error ? 'alert' : 'status'">

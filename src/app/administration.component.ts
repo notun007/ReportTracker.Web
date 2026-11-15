@@ -6,7 +6,9 @@ import { Observable } from 'rxjs';
 import { DivisionItem, SubmissionRecipient, UserItem } from './dashboard.models';
 import { DashboardService, apiError } from './dashboard.service';
 
-type Screen = 'divisions' | 'users' | 'recipients' | 'departments';
+import { SchedulePresetsComponent } from './schedule-presets.component';
+
+type Screen = 'divisions' | 'users' | 'recipients' | 'departments' | 'schedules';
 type Directory<T> = { rows: T[]; loading: boolean; error: string };
 type DuplicateField = 'code' | 'employeeId' | 'email' | 'organizationName' | 'departmentName';
 
@@ -18,7 +20,7 @@ const emptyUser = () => ({
 
 @Component({
   selector: 'app-administration',
-  imports: [FormsModule],
+  imports: [FormsModule, SchedulePresetsComponent],
   templateUrl: './administration.component.html',
   styleUrl: './administration.component.scss'
 })
@@ -31,7 +33,8 @@ export class AdministrationComponent implements OnInit {
     { id: 'divisions', title: 'Add division', list: 'Divisions', columns: ['Code', 'Division name', 'Status'] },
     { id: 'users', title: 'Add user', list: 'Users', columns: ['Employee ID', 'Name', 'Contact', 'Division', 'Roles', 'Status', 'Actions'] },
     { id: 'recipients', title: 'Submission recipients', list: 'Saved recipients', columns: ['Organization name', 'Departments'] },
-    { id: 'departments', title: 'Add recipient department', list: 'Recipient departments', columns: ['Department name'] }
+    { id: 'departments', title: 'Add recipient department', list: 'Recipient departments', columns: ['Department name'] },
+    { id: 'schedules', title: 'Reporting Cycle Rules', list: 'Saved rules', columns: [] }
   ] as const;
 
   protected readonly active = signal<Screen>('divisions');
@@ -63,6 +66,7 @@ export class AdministrationComponent implements OnInit {
       case 'users': return this.filteredUsers().length;
       case 'recipients': return this.filteredRecipients().length;
       case 'departments': return this.filteredDepartments().length;
+      case 'schedules': return 0;
     }
   });
   protected readonly currentDirectory = computed(() => {
@@ -259,7 +263,7 @@ export class AdministrationComponent implements OnInit {
     this.notify(text, true);
   }
 
-  private notify(text: string, error: boolean) {
+  protected notify(text: string, error: boolean) {
     this.dismissToast();
     this.toast.set({ text, error });
     this.toastTimer = setTimeout(() => this.toast.set(null), error ? 8000 : 5000);

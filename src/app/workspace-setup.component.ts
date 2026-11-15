@@ -10,6 +10,15 @@ import { ReportProfileComponent } from './report-profile.component';
 
 type SetupTab = 'reports' | 'create' | 'profile' | 'components' | 'cycles';
 
+const reportFrequencyByCode = new Map([
+  ['weekly', 'Weekly'],
+  ['twice-monthly', 'Biweekly'],
+  ['monthly', 'Monthly'],
+  ['quarterly', 'Quarterly'],
+  ['half-yearly', 'HalfYearly'],
+  ['yearly', 'Yearly']
+]);
+
 @Component({
   selector: 'app-workspace-setup', imports: [FormsModule, ReportComponentEditorComponent, ReportProfileComponent, SubmissionDestinationPickerComponent],
   styles: [`
@@ -86,7 +95,14 @@ type SetupTab = 'reports' | 'create' | 'profile' | 'components' | 'cycles';
           <label class="report-field"><span>Receiving division</span><select name="reportReceivingDivision" [(ngModel)]="report.receivingDivisionId" required><option value="">Choose receiving division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
           <label class="report-field"><span>Final submitting division</span><select name="submittingDivisionId" [(ngModel)]="report.submittingDivisionId" (ngModelChange)="report.primarySubmittingOfficerId = ''; report.deputySubmittingOfficerId = ''" required><option value="">Choose final submitting division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
           <label class="report-field"><span>Final submitting officer</span><select name="primarySubmittingOfficerId" [ngModel]="report.primarySubmittingOfficerId" (ngModelChange)="selectFinalSubmitter($event)" required><option value="">Choose officer</option>@for (u of officers(report.submittingDivisionId); track u.id) { <option [value]="u.id">{{ u.name }}</option> }</select></label>
-          <label class="report-field"><span>Frequency</span><select name="frequency" [(ngModel)]="report.frequency">@for (f of frequencies; track f) { <option [value]="f">{{ f }}</option> }</select></label>
+          <label class="report-field"><span>Frequency</span>
+            <select name="frequency" [(ngModel)]="report.frequency" required [disabled]="!frequencies().length">
+              <option value="">Choose a frequency</option>
+              @for (frequency of frequencies(); track frequency.value) {
+                <option [value]="frequency.value">{{ frequency.name }}</option>
+              }
+            </select>
+          </label>
           <label class="report-field"><span>Main deadline time</span><input name="dueTime" type="time" [(ngModel)]="report.dueTime" required></label>
           <label class="report-field"><span>Deadline lead days</span><input name="componentDeadlineOffsetDays" type="number" min="0" max="365" [(ngModel)]="report.componentDeadlineOffsetDays" required></label>
           <app-submission-destination-picker class="report-description" [recipients]="submissionRecipients()" [destination]="report"
@@ -99,7 +115,7 @@ type SetupTab = 'reports' | 'create' | 'profile' | 'components' | 'cycles';
             </div>
           </details>
           @if (error()) { <div class="error-banner report-description" role="alert">{{ error() }}</div> }
-          <div class="setup-actions"><button class="secondary" type="button" [disabled]="busy()" (click)="selectTab('reports')">Cancel</button><button class="primary" type="submit" [disabled]="busy() || reportForm.invalid || !validDestination(report)">{{ busy() ? 'Saving…' : 'Create report' }}</button></div>
+          <div class="setup-actions"><button class="secondary" type="button" [disabled]="busy()" (click)="selectTab('reports')">Cancel</button><button class="primary" type="submit" [disabled]="busy() || reportForm.invalid || !hasFrequency(report.frequency) || !validDestination(report)">{{ busy() ? 'Saving…' : 'Create report' }}</button></div>
         </form>
             </article>
         </section>
@@ -171,7 +187,7 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
   protected readonly busy = signal(false);
   protected readonly error = signal('');
   protected readonly message = signal('');
-  protected readonly frequencies = ['Daily', 'Weekly', 'Biweekly', 'Monthly', 'Quarterly', 'HalfYearly', 'Yearly', 'AdHoc'];
+  protected readonly frequencies = signal<{ value: string; name: string }[]>([]);
   protected report = this.emptyReport();
   protected cycle = { reportId: '', periodKey: '', periodLabel: '', periodStart: '', periodEnd: '' };
   protected tasks = [this.newTask()];
@@ -186,7 +202,13 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
   protected load(showLoading = true) {
     if (showLoading) this.loading.set(true);
     this.error.set('');
-    forkJoin({ lookups: this.api.lookups(), reports: this.api.reports(), recipients: this.api.submissionRecipients() }).subscribe({ next: data => {
+    forkJoin({ lookups: this.api.lookups(), reports: this.api.reports(), recipients: this.api.submissionRecipients(), frequencies: this.api.reportingFrequencies() }).subscribe({ next: data => {
+      const frequencies = data.frequencies.flatMap(({ code, name }) => {
+        const value = reportFrequencyByCode.get(code);
+        return value ? [{ value, name }] : [];
+      });
+      this.frequencies.set(frequencies);
+      if (!this.hasFrequency(this.report.frequency)) this.report.frequency = this.defaultFrequency();
       this.lookups.set(data.lookups); this.reports.set(data.reports); this.submissionRecipients.set(data.recipients); this.loading.set(false);
       if (!data.reports.some(row => row.id === this.selectedReportId())) this.selectedReportId.set(data.reports[0]?.id ?? '');
       if (this.activeTab() === 'cycles' && this.cycle.reportId !== this.selectedReportId()) this.selectReport(this.selectedReportId());
@@ -274,7 +296,15 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
     this.selectTab(this.tabs[next].id);
     (event.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLButtonElement>('[role=tab]')[next]?.focus();
   }
-  private emptyReport() { return { code: '', name: '', ownerDivisionId: this.session.user()?.divisionId ?? '', receivingDivisionId: '', submittingDivisionId: '', primarySubmittingOfficerId: '', deputySubmittingOfficerId: '', submissionRecipientId: '', submissionDepartmentIds: [] as string[], frequency: 'Monthly', dueTime: '17:00', componentDeadlineOffsetDays: 1, instructionReference: '', description: '' }; }
+  private emptyReport() { return { code: '', name: '', ownerDivisionId: this.session.user()?.divisionId ?? '', receivingDivisionId: '', submittingDivisionId: '', primarySubmittingOfficerId: '', deputySubmittingOfficerId: '', submissionRecipientId: '', submissionDepartmentIds: [] as string[], frequency: this.defaultFrequency(), dueTime: '17:00', componentDeadlineOffsetDays: 1, instructionReference: '', description: '' }; }
+  private defaultFrequency() {
+    return this.hasFrequency('Monthly') ? 'Monthly' : this.frequencies()[0]?.value ?? '';
+  }
+
+  protected hasFrequency(value: string) {
+    return this.frequencies().some(frequency => frequency.value === value);
+  }
+
   protected validDestination(destination: SubmissionDestination) {
     const recipient = this.submissionRecipients().find(r => r.id === destination.submissionRecipientId);
     return !!recipient && destination.submissionDepartmentIds.length > 0
@@ -291,7 +321,7 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
     return this.officers(this.report.submittingDivisionId).filter(person => person.id !== this.report.primarySubmittingOfficerId);
   }
   protected addReport(form: NgForm) {
-    if (form.invalid || !this.validDestination(this.report) || this.busy()) return;
+    if (form.invalid || !this.hasFrequency(this.report.frequency) || !this.validDestination(this.report) || this.busy()) return;
     if (this.report.primarySubmittingOfficerId === this.report.deputySubmittingOfficerId) {
       this.error.set('Choose a different deputy submitting officer or select None.');
       return;
