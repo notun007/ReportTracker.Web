@@ -5,7 +5,9 @@
   }
 </nav>
 
-@if (active() === 'schedules') {
+@if (active() === 'frequencies') {
+  <app-reporting-frequencies (notification)="notify($event.text, $event.error)" />
+} @else if (active() === 'schedules') {
   <app-schedule-presets (notification)="notify($event.text, $event.error)" />
 } @else {
 <section class="setup-card entry-card report-inline-layout" aria-labelledby="admin-entry-title">

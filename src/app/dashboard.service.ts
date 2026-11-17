@@ -1,7 +1,7 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { catchError, switchMap, tap, throwError } from 'rxjs';
-import { WeeklyPresetPeriod, ReportingFrequencyItem, SchedulePresetDirectory, SchedulePresetItem, SchedulePresetPeriod, DivisionItem, ComponentContributor, Lookup, SubmissionDestination, SubmissionRecipient, ObligationActions, ReceiptItem, ReportingCycle, DashboardSummary, SendingRecord, SendingHistory, SessionResponse, SessionUser, Lookups, ReportDefinition, UserItem, ComponentDefinition, SubmissionReadiness, EvidenceItem, ExtensionItem, ReminderPolicy, NotificationItem, CalendarItem, ManagementAnalytics } from './dashboard.models';
+import { WeeklyPresetPeriod, ReportingFrequencyItem, SchedulePresetDirectory, SchedulePresetItem, SchedulePresetPeriod, DivisionItem, ComponentContributor, Lookup, SubmissionDestination, SubmissionRecipient, ObligationActions, ReceiptItem, ReportingCycle, DashboardSummary, SendingRecord, SendingHistory, SessionResponse, SessionUser, Lookups, ReportDefinition, UserItem, ComponentDefinition, SubmissionReadiness, EvidenceItem, ExtensionItem, ReminderPolicy, NotificationItem, CalendarItem, ManagementAnalytics, YearlyCyclePreview, YearlyCycleGenerationResult } from './dashboard.models';
 
 export function apiError(error: unknown): string {
   if (error instanceof HttpErrorResponse) {
@@ -43,6 +43,12 @@ export class DashboardService {
   cycles(id: string) { return this.http.get<ReportingCycle[]>(`/api/setup/reports/${id}/cycles`); }
   createCycle(id: string, body: unknown) { return this.http.post(`/api/setup/reports/${id}/cycles`, body); }
   reportingFrequencies() { return this.http.get<ReportingFrequencyItem[]>('/api/setup/reporting-frequencies'); }
+  createReportingFrequency(body: {code:string; name:string; displayOrder:number}) {
+    return this.http.post<ReportingFrequencyItem>('/api/setup/reporting-frequencies', body);
+  }
+  updateReportingFrequency(id:number, body: {name:string; displayOrder:number}) {
+    return this.http.put<ReportingFrequencyItem>(`/api/setup/reporting-frequencies/${id}`, body);
+  }
   schedulePresets() { return this.http.get<SchedulePresetDirectory>('/api/setup/schedule-presets'); }
   previewSchedulePreset(ruleCode: string, month: string) {
     return this.http.get<SchedulePresetPeriod[]>('/api/setup/schedule-presets/preview', { params: { ruleCode, month } });
@@ -80,6 +86,8 @@ export class DashboardService {
   calendar(fromUtc:string,toUtc:string) { return this.http.get<CalendarItem[]>('/api/operations/calendar',{params:{fromUtc,toUtc}}); }
   analytics() { return this.http.get<ManagementAnalytics>('/api/operations/analytics'); }
   generateCycles(through:string) { return this.http.post('/api/automation/generate-cycles',{}, {params:{through}}); }
+  previewYearlyCycles(year:number) { return this.http.get<YearlyCyclePreview>('/api/automation/yearly-cycles/preview',{params:{year}}); }
+  generateYearlyCycles(year:number) { return this.http.post<YearlyCycleGenerationResult>('/api/automation/yearly-cycles',{}, {params:{year}}); }
   changeUserStatus(id:string,isActive:boolean) { return this.http.patch<void>(`/api/setup/users/${id}/status`,{isActive}); }
   resetPassword(id:string,newPassword:string) { return this.http.post<void>(`/api/setup/users/${id}/reset-password`,{newPassword}); }
 }

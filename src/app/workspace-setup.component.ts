@@ -7,6 +7,7 @@ import { Lookups, ReportDefinition, ReportingCycle, SubmissionDestination, Submi
 import { SubmissionDestinationPickerComponent } from './submission-destination-picker.component';
 import { ReportComponentEditorComponent } from './report-component-editor.component';
 import { ReportProfileComponent } from './report-profile.component';
+import { YearlyCycleGeneratorComponent } from './yearly-cycle-generator.component';
 
 type SetupTab = 'reports' | 'create' | 'profile' | 'components' | 'cycles';
 
@@ -20,7 +21,7 @@ const reportFrequencyByCode = new Map([
 ]);
 
 @Component({
-  selector: 'app-workspace-setup', imports: [FormsModule, ReportComponentEditorComponent, ReportProfileComponent, SubmissionDestinationPickerComponent],
+  selector: 'app-workspace-setup', imports: [FormsModule, ReportComponentEditorComponent, ReportProfileComponent, SubmissionDestinationPickerComponent, YearlyCycleGeneratorComponent],
   styles: [`
     .cycle-details { display:grid; gap:14px; min-width:0; margin:0; padding:0; border:0; }
     .cycle-create-action { justify-self:end; }
@@ -71,10 +72,10 @@ const reportFrequencyByCode = new Map([
         </div>
         <section class="setup-tab-panel" role="tabpanel" id="setup-panel-reports" aria-labelledby="setup-tab-reports" [hidden]="activeTab()!=='reports'">
           <section class="tracker-panel reports-grid" aria-label="Reports"><div class="panel-heading"><h3>Reports ({{ reports().length }})</h3></div>
-            <div class="table-wrap"><table><thead><tr><th>Report</th><th>Frequency</th><th>Coordinating division</th><th>Submission recipient</th><th>Cycles</th><th>Actions</th></tr></thead><tbody>
+            <div class="table-wrap"><table><thead><tr><th>Report</th><th>Type</th><th>Frequency</th><th>Coordinating division</th><th>Submission recipient</th><th>Cycles</th><th>Actions</th></tr></thead><tbody>
               @for (r of reports(); track r.id) {
                 <tr [class.current-report]="r.id===selectedReportId()">
-                  <td><strong>{{ r.name }}</strong><span>{{ r.code }}</span></td><td>{{ r.frequency }}</td><td>{{ divisionName(r.ownerDivisionId) }}</td>
+                  <td><strong>{{ r.name }}</strong><span>{{ r.code }}</span></td><td>{{ r.reportTypeName }}</td><td>{{ r.frequency }}</td><td>{{ divisionName(r.ownerDivisionId) }}</td>
                   <td><strong>{{ recipientName(r) }}</strong><span>{{ r.submissionDepartmentIds?.length ?? 0 }} {{ r.submissionDepartmentIds?.length===1 ? 'department' : 'departments' }}</span></td><td>{{ r.cycleCount }}</td>
                   <td><div class="report-row-actions">
                     <button class="link-button" type="button" (click)="openReportTab(r.id,'profile')" [attr.aria-label]="'Report profile for '+r.code" [disabled]="workspaceBusy()">Profile</button>
@@ -82,7 +83,7 @@ const reportFrequencyByCode = new Map([
                     <button class="link-button" type="button" (click)="openReportTab(r.id,'cycles')" [attr.aria-label]="'Reporting cycles for '+r.code" [disabled]="workspaceBusy()">Cycles</button>
                   </div></td>
                 </tr>
-              } @empty { <tr><td colspan="6" class="empty">No reports configured yet.</td></tr> }
+              } @empty { <tr><td colspan="7" class="empty">No reports configured yet.</td></tr> }
             </tbody></table></div>
           </section>
         </section>
@@ -91,6 +92,7 @@ const reportFrequencyByCode = new Map([
 <form class="report-inline-fields" #reportForm="ngForm" (ngSubmit)="addReport(reportForm)">
           <label class="report-field"><span>Code</span><input name="code" [(ngModel)]="report.code" required maxlength="40"></label>
           <label class="report-field"><span>Report name</span><input name="name" [(ngModel)]="report.name" required maxlength="150"></label>
+          <label class="report-field"><span>Report type</span><select name="reportTypeId" [(ngModel)]="report.reportTypeId" required><option [ngValue]="null">Choose report type</option>@for (type of lookups().reportTypes; track type.id) { <option [ngValue]="type.id">{{ type.name }}</option> }</select></label>
           <label class="report-field"><span>Coordinating division</span><select name="ownerDivisionId" [(ngModel)]="report.ownerDivisionId" required><option value="">Choose division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
           <label class="report-field"><span>Receiving division</span><select name="reportReceivingDivision" [(ngModel)]="report.receivingDivisionId" required><option value="">Choose receiving division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
           <label class="report-field"><span>Final submitting division</span><select name="submittingDivisionId" [(ngModel)]="report.submittingDivisionId" (ngModelChange)="report.primarySubmittingOfficerId = ''; report.deputySubmittingOfficerId = ''" required><option value="">Choose final submitting division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
@@ -134,6 +136,7 @@ const reportFrequencyByCode = new Map([
           } @else { <p class="setup-empty">Choose a report to view or add components.</p> }
         </section>
         <section class="setup-tab-panel" role="tabpanel" id="setup-panel-cycles" aria-labelledby="setup-tab-cycles" [hidden]="activeTab()!=='cycles'">
+          @if (canGenerateYearly()) { <app-yearly-cycle-generator (changed)="changed.emit(); load(false)" /> }
           @if (selectedReport()) {
             <article class="setup-card setup-editor report-inline-layout"><h3>Reporting cycles</h3>
         <form class="report-inline-fields" #cycleForm="ngForm" (ngSubmit)="addCycle(cycleForm)">
@@ -175,12 +178,13 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
   protected readonly activeTab = signal<SetupTab>('reports');
   protected readonly selectedReportId = signal('');
   protected readonly selectedReport = computed(() => this.reports().find(report => report.id === this.selectedReportId()));
+  protected readonly canGenerateYearly = computed(() => this.session.user()?.permissions.includes('administration.manage') ?? false);
   protected readonly componentsOpened = signal(false);
   private readonly componentEditor = viewChild(ReportComponentEditorComponent);
   readonly changed = output<void>();
   private readonly api = inject(DashboardService);
   private readonly session = inject(SessionService);
-  protected readonly lookups = signal<Lookups>({ divisions: [], officers: [] });
+  protected readonly lookups = signal<Lookups>({ divisions: [], officers: [], reportTypes: [] });
   protected readonly submissionRecipients = signal<SubmissionRecipient[]>([]);
   protected readonly reports = signal<ReportDefinition[]>([]);
   protected readonly loading = signal(true);
@@ -296,7 +300,7 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
     this.selectTab(this.tabs[next].id);
     (event.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLButtonElement>('[role=tab]')[next]?.focus();
   }
-  private emptyReport() { return { code: '', name: '', ownerDivisionId: this.session.user()?.divisionId ?? '', receivingDivisionId: '', submittingDivisionId: '', primarySubmittingOfficerId: '', deputySubmittingOfficerId: '', submissionRecipientId: '', submissionDepartmentIds: [] as string[], frequency: this.defaultFrequency(), dueTime: '17:00', componentDeadlineOffsetDays: 1, instructionReference: '', description: '' }; }
+  private emptyReport() { return { code: '', name: '', reportTypeId: 2 as number | null, ownerDivisionId: this.session.user()?.divisionId ?? '', receivingDivisionId: '', submittingDivisionId: '', primarySubmittingOfficerId: '', deputySubmittingOfficerId: '', submissionRecipientId: '', submissionDepartmentIds: [] as string[], frequency: this.defaultFrequency(), dueTime: '17:00', componentDeadlineOffsetDays: 1, instructionReference: '', description: '' }; }
   private defaultFrequency() {
     return this.hasFrequency('Monthly') ? 'Monthly' : this.frequencies()[0]?.value ?? '';
   }

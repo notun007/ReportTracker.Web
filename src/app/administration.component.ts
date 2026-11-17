@@ -7,8 +7,9 @@ import { DivisionItem, SubmissionRecipient, UserItem } from './dashboard.models'
 import { DashboardService, apiError } from './dashboard.service';
 
 import { SchedulePresetsComponent } from './schedule-presets.component';
+import { ReportingFrequenciesComponent } from './reporting-frequencies.component';
 
-type Screen = 'divisions' | 'users' | 'recipients' | 'departments' | 'schedules';
+type Screen = 'divisions' | 'users' | 'recipients' | 'departments' | 'frequencies' | 'schedules';
 type Directory<T> = { rows: T[]; loading: boolean; error: string };
 type DuplicateField = 'code' | 'employeeId' | 'email' | 'organizationName' | 'departmentName';
 
@@ -20,7 +21,7 @@ const emptyUser = () => ({
 
 @Component({
   selector: 'app-administration',
-  imports: [FormsModule, SchedulePresetsComponent],
+  imports: [FormsModule, SchedulePresetsComponent, ReportingFrequenciesComponent],
   templateUrl: './administration.component.html',
   styleUrl: './administration.component.scss'
 })
@@ -34,6 +35,7 @@ export class AdministrationComponent implements OnInit {
     { id: 'users', title: 'Add user', list: 'Users', columns: ['Employee ID', 'Name', 'Contact', 'Division', 'Roles', 'Status', 'Actions'] },
     { id: 'recipients', title: 'Submission recipients', list: 'Saved recipients', columns: ['Organization name', 'Departments'] },
     { id: 'departments', title: 'Add recipient department', list: 'Recipient departments', columns: ['Department name'] },
+    { id: 'frequencies', title: 'Reporting Frequencies', list: 'Reporting frequencies', columns: [] },
     { id: 'schedules', title: 'Reporting Cycle Rules', list: 'Saved rules', columns: [] }
   ] as const;
 
@@ -66,6 +68,7 @@ export class AdministrationComponent implements OnInit {
       case 'users': return this.filteredUsers().length;
       case 'recipients': return this.filteredRecipients().length;
       case 'departments': return this.filteredDepartments().length;
+      case 'frequencies': return 0;
       case 'schedules': return 0;
     }
   });

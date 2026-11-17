@@ -45,7 +45,7 @@ import { DashboardService, apiError } from './dashboard.service';
 export class ComponentResponsibilitiesComponent implements OnInit {
   private readonly api = inject(DashboardService);
   protected readonly reports = signal<ReportDefinition[]>([]);
-  protected readonly lookups = signal<Lookups>({ divisions: [], officers: [] });
+  protected readonly lookups = signal<Lookups>({ divisions: [], officers: [], reportTypes: [] });
   protected readonly components = signal<ComponentDefinition[]>([]);
   protected readonly error = signal('');
   protected readonly message = signal('');

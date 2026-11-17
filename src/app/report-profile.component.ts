@@ -183,6 +183,7 @@ export class ReportProfileComponent {
     return [
       { label: 'Code', value: report.code },
       { label: 'Report name', value: report.name },
+      { label: 'Report type', value: report.reportTypeName },
       { label: 'Frequency', value: report.frequency },
       { label: 'Main deadline time', value: report.dueTime ? report.dueTime.slice(0, 5) + (report.timeZoneId ? ' (' + report.timeZoneId + ')' : '') : '—' },
       { label: 'Coordinating division', value: this.divisionName(report.ownerDivisionId) },
