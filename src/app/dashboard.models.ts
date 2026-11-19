@@ -26,7 +26,7 @@ export interface Lookups { divisions: Lookup[]; officers: (Lookup & { divisionId
 export interface SubmissionRecipient extends Lookup { departments: Lookup[]; }
 export interface SubmissionDestination { submissionRecipientId: string; submissionDepartmentIds: string[]; }
 export interface ReportDefinition {
-  dueTime?: string | null; componentDeadlineOffsetDays?: number | null; timeZoneId?: string | null;
+  dueTime?: string | null; reportDeadlineOffsetDays?: number; componentDeadlineOffsetDays?: number | null; timeZoneId?: string | null;
   instructionReference?: string | null; description?: string | null;
   submissionRecipientId?: string | null; submissionDepartmentIds?: string[]; submissionDestination?: string; id: string; code: string; name: string; reportTypeId: number; reportTypeName: string; ownerDivisionId: string; bbRecipient: string; frequency: string; cycleCount: number; receivingDivisionId: string | null; submittingDivisionId: string | null; primarySubmittingOfficerId: string | null; deputySubmittingOfficerId: string | null; }
 export interface UserItem { id: string; displayName: string; email: string; mobileNumber: string | null; employeeId: string; divisionId: string; isActive: boolean; roles: string[]; }
@@ -54,7 +54,8 @@ export interface NotificationItem { jobId:string; obligationId:string; report:st
 export interface CalendarItem { obligationId:string; cycleId:string; report:string; obligation:string; period:string; type:string; owner:string; dueAtUtc:string; timeliness:string; sendingStatus:string; hasApprovedExtension:boolean; }
 export interface DivisionPerformance { division:string; total:number; sentOnTime:number; sentLate:number; overdue:number; }
 export interface ManagementAnalytics { total:number; submitted:number; overdue:number; reportsAtRisk:number; pendingExtensions:number; failedNotifications:number; onTimeRate:number; divisions:DivisionPerformance[]; }
-export interface YearlyCyclePlanItem { reportId:string; reportCode:string; reportName:string; frequency:string; periodKey:string; periodLabel:string; periodStart:string; periodEnd:string; status:'New'|'Existing'|'Skipped'; reason:string|null; }
+export interface ComponentDeadlinePlanItem { componentId:string; componentName:string; deadline:string; }
+export interface YearlyCyclePlanItem { reportId:string; reportCode:string; reportName:string; frequency:string; periodKey:string; periodLabel:string; periodStart:string; periodEnd:string; finalDeadline:string|null; defaultComponentDeadline:string|null; componentDeadlines:ComponentDeadlinePlanItem[]; status:'New'|'Existing'|'Skipped'; reason:string|null; }
 export interface YearlyCyclePreview { year:number; reportsEvaluated:number; totalCycles:number; newCycles:number; existingCycles:number; skippedCycles:number; items:YearlyCyclePlanItem[]; }
 export interface YearlyCycleGenerationResult { year:number; reportsEvaluated:number; cyclesCreated:number; existingCycles:number; skippedCycles:number; componentsCreated:number; warnings:string[]; }
 

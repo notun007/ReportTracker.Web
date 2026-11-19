@@ -10,6 +10,8 @@ import { ReportProfileComponent } from './report-profile.component';
 import { YearlyCycleGeneratorComponent } from './yearly-cycle-generator.component';
 
 type SetupTab = 'reports' | 'create' | 'profile' | 'components' | 'cycles';
+type CycleView = 'list' | 'generate';
+type CycleEditorMode = 'list' | 'detail' | 'manual';
 
 const reportFrequencyByCode = new Map([
   ['weekly', 'Weekly'],
@@ -26,6 +28,28 @@ const reportFrequencyByCode = new Map([
     .cycle-details { display:grid; gap:14px; min-width:0; margin:0; padding:0; border:0; }
     .cycle-create-action { justify-self:end; }
     .cycle-notice { margin:0; color:var(--muted); }
+    .cycle-list-head { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:14px; }
+    .cycle-list-head h3 { margin:0 0 4px; }
+    .cycle-list-head p { margin:0; color:var(--muted); }
+    .cycle-list-actions { display:flex; align-items:end; gap:8px; flex-wrap:wrap; }
+    .cycle-year { min-width:125px; }
+    .setup-tab-panel.cycle-panel { max-height:none; overflow:visible; }
+    .cycle-table-wrap { overflow:visible; }
+    .cycle-table { min-width:0; table-layout:fixed; }
+    .cycle-table th,.cycle-table td { padding-inline:10px; }
+    .cycle-table th:nth-child(1) { width:30%; }
+    .cycle-table th:nth-child(2),.cycle-table th:nth-child(3) { width:21%; }
+    .cycle-table th:nth-child(4) { width:10%; }
+    .cycle-table th:nth-child(5) { width:18%; }
+    .cycle-table td:last-child,.cycle-table th:last-child { text-align:right; }
+    .cycle-editor-head { display:flex; align-items:center; gap:10px; grid-column:1/-1; }
+    .cycle-editor-head h3 { margin:0; }
+    .cycle-editor-head button { min-width:auto; padding:7px 10px; color:var(--muted); background:transparent; border:0; }
+    .cycle-year-context { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:12px 14px; border:1px solid var(--line); border-radius:8px; background:var(--surface-soft,#f7faff); }
+    .cycle-year-context strong { display:block; margin-bottom:3px; }
+    .cycle-year-context span { color:var(--muted); font-size:.9rem; }
+    .cycle-year-context .cycle-periods { max-width:58%; text-align:right; }
+    .cycle-conflict { margin:0; }
     .setup-editor { padding:18px 22px 0; border:0; border-radius:0; box-shadow:none; }
     .setup-editor h3 { margin:0 0 14px; }
     .setup-editor>form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 16px; align-items:start; }
@@ -38,7 +62,7 @@ const reportFrequencyByCode = new Map([
     .report-optional { padding:10px 12px; border:1px solid var(--line); border-radius:8px; }
     .report-optional summary { cursor:pointer; font-size:13px; font-weight:600; }
     .report-optional .form-grid { margin-top:12px; }
-    @media(max-width:640px) { .setup-editor { padding:14px 12px 0; } .setup-editor>form { grid-template-columns:minmax(0,1fr); } }
+    @media(max-width:640px) { .setup-editor { padding:14px 12px 0; } .setup-editor>form { grid-template-columns:minmax(0,1fr); }.cycle-list-head { align-items:stretch; flex-direction:column; }.cycle-list-actions>* { flex:1; } }
   `],
 
   template: `
@@ -105,8 +129,10 @@ const reportFrequencyByCode = new Map([
               }
             </select>
           </label>
-          <label class="report-field"><span>Main deadline time</span><input name="dueTime" type="time" [(ngModel)]="report.dueTime" required></label>
-          <label class="report-field"><span>Deadline lead days</span><input name="componentDeadlineOffsetDays" type="number" min="0" max="365" [(ngModel)]="report.componentDeadlineOffsetDays" required></label>
+          <label class="report-field"><span>Report deadline after period end</span><input name="reportDeadlineOffsetDays" type="number" min="0" max="365" [(ngModel)]="report.reportDeadlineOffsetDays" required><small>Calendar days</small></label>
+          <label class="report-field"><span>Report submission time</span><input name="dueTime" type="time" [(ngModel)]="report.dueTime" required><small>Asia/Dhaka</small></label>
+          <label class="report-field"><span>Component deadline before report deadline</span><input name="componentDeadlineOffsetDays" type="number" min="0" max="365" [(ngModel)]="report.componentDeadlineOffsetDays" required><small>Default calendar-day lead</small></label>
+          <div class="deadline-formula report-description" role="note"><strong>Deadline rule</strong><span>Report: period end + {{ report.reportDeadlineOffsetDays || 0 }} calendar day(s), at {{ report.dueTime || '17:00' }}. Components: {{ report.componentDeadlineOffsetDays || 0 }} calendar day(s) before the report deadline.</span></div>
           <app-submission-destination-picker class="report-description" [recipients]="submissionRecipients()" [destination]="report"
             [disabled]="busy()" (destinationChange)="updateReportDestination($event)" />
           <details class="report-optional report-description"><summary>Optional fields</summary>
@@ -135,35 +161,52 @@ const reportFrequencyByCode = new Map([
             }
           } @else { <p class="setup-empty">Choose a report to view or add components.</p> }
         </section>
-        <section class="setup-tab-panel" role="tabpanel" id="setup-panel-cycles" aria-labelledby="setup-tab-cycles" [hidden]="activeTab()!=='cycles'">
-          @if (canGenerateYearly()) { <app-yearly-cycle-generator (changed)="changed.emit(); load(false)" /> }
-          @if (selectedReport()) {
-            <article class="setup-card setup-editor report-inline-layout"><h3>Reporting cycles</h3>
-        <form class="report-inline-fields" #cycleForm="ngForm" (ngSubmit)="addCycle(cycleForm)">
-            @if (cyclesLoading()) { <p class="cycle-state" role="status">Loading saved reporting cycles…</p> }
-            @if (cycleLoadError()) { <div class="error-banner cycle-state" role="alert">{{ cycleLoadError() }} <button type="button" (click)="selectReport(cycle.reportId)">Retry loading cycles</button></div> }
-            @if (cycle.reportId && !cyclesLoading() && !cycleLoadError()) {
-              <label class="report-field"><span>Saved cycle</span><select name="savedCycleId" [ngModel]="savedCycleId" (ngModelChange)="selectCycle($event)"><option value="">Create a new manual cycle</option>@for (saved of savedCycles(); track saved.id) { <option [value]="saved.id">{{ saved.periodLabel }} ({{ saved.periodKey }})</option> }</select></label>
-              @if (savedCycleId) {
-                <button class="secondary cycle-create-action" type="button" [disabled]="busy()" (click)="selectCycle('')">Create a new manual cycle</button>
-              }
-              @if (!savedCycleId) { <p class="cycle-notice" role="status">{{ savedCycles().length ? 'Enter a new reporting period below. Existing cycles are available in Saved cycle.' : 'No saved cycles exist for this report. Enter a period to create one manually.' }}</p> }
-              <fieldset class="cycle-details" [disabled]="!!savedCycleId">
-              <div class="form-grid"><label class="report-field"><span>Period key</span><input name="periodKey" [(ngModel)]="cycle.periodKey" required maxlength="80" placeholder="e.g. 2026-10"></label><label class="report-field"><span>Period label</span><input name="periodLabel" [(ngModel)]="cycle.periodLabel" required maxlength="150" placeholder="e.g. October 2026"></label><label class="report-field"><span>Period start</span><input name="periodStart" type="date" [(ngModel)]="cycle.periodStart" required></label><label class="report-field"><span>Period end</span><input name="periodEnd" type="date" [(ngModel)]="cycle.periodEnd" required></label></div>
-              @if (!savedCycleId && cycleAssignmentsMissing()) { <p class="error-banner" role="alert">Complete the submitting division, assigned officers and recipients in Report Configuration and Components and Responsibilities before creating this cycle.</p> }
-              <div class="form-grid">
-              @for (task of tasks; track $index; let i = $index) {
-                <label class="report-field"><span>{{ task.type === 'BB' ? 'Final submission deadline (Asia/Dhaka)' : task.name + ' deadline (Asia/Dhaka)' }}</span><input type="datetime-local" [name]="'due'+i" [(ngModel)]="task.dueLocal" required></label>
-              }
-              </div>
-              @if (savedCycleId) {
-                @if (!tasks.length) { <p class="cycle-notice">No tasks were saved for this cycle.</p> }
-                @else if (!hasSavedComponentTasks()) { <p class="cycle-notice">No component tasks were saved for this cycle.</p> }
-              }
-              @if (!savedCycleId) { <div class="setup-actions"><button class="primary" type="submit" [disabled]="busy() || cycleForm.invalid || cycleAssignmentsMissing()">Create cycle manually</button></div> }</fieldset>
+        <section class="setup-tab-panel cycle-panel" role="tabpanel" id="setup-panel-cycles" aria-labelledby="setup-tab-cycles" [hidden]="activeTab()!=='cycles'">
+          @if (selectedReport(); as selected) {
+            @if (cycleView() === 'generate' && canGenerateCycles()) {
+              <app-yearly-cycle-generator [reportId]="selected.id" [reportCode]="selected.code" [reportName]="selected.name" [frequency]="selected.frequency" [componentLeadDays]="selected.componentDeadlineOffsetDays ?? 0" (cancelled)="closeCycleGenerator()" (completed)="finishCycleGeneration($event)" />
+            } @else {
+              <article class="setup-card setup-editor report-inline-layout">
+                @if (cycleEditorMode() === 'list') {
+                  <div class="cycle-list-head"><div><h3>Reporting cycles</h3><p>Review saved periods or generate the missing cycles for {{ selected.code }}.</p></div><div class="cycle-list-actions">
+                    @if (cycleYears().length > 1) { <label class="report-field cycle-year"><span>Year</span><select [ngModel]="cycleYear()" (ngModelChange)="cycleYear.set($event)"><option value="">All years</option>@for (year of cycleYears(); track year) { <option [value]="year">{{ year }}</option> }</select></label> }
+                    <button class="secondary" type="button" (click)="openManualCycle()" [disabled]="busy()">Create manually</button>
+                    @if (canGenerateCycles()) { <button class="primary" type="button" (click)="openCycleGenerator()" [disabled]="busy()">Generate cycles</button> }
+                  </div></div>
+                  @if (cyclesLoading()) { <p class="cycle-state" role="status">Loading saved reporting cycles…</p> }
+                  @if (cycleLoadError()) { <div class="error-banner cycle-state" role="alert">{{ cycleLoadError() }} <button type="button" (click)="selectReport(cycle.reportId)">Retry loading cycles</button></div> }
+                  @if (!cyclesLoading() && !cycleLoadError()) {
+                    <div class="table-wrap cycle-table-wrap"><table class="cycle-table"><thead><tr><th>Period</th><th>Period start</th><th>Period end</th><th>Tasks</th><th>Action</th></tr></thead><tbody>
+                      @for (saved of filteredCycles(); track saved.id) { <tr><td><strong>{{ saved.periodLabel }}</strong><span>{{ saved.periodKey }}</span></td><td>{{ saved.periodStart }}</td><td>{{ saved.periodEnd }}</td><td>{{ saved.obligations.length }}</td><td><button class="link-button" type="button" (click)="openCycleDetail(saved.id)">View</button></td></tr> }
+                      @empty { <tr><td colspan="5" class="empty">No reporting cycles found for this selection.</td></tr> }
+                    </tbody></table></div>
+                  }
+                } @else {
+                  <form class="report-inline-fields" #cycleForm="ngForm" (ngSubmit)="addCycle(cycleForm)">
+                    <div class="cycle-editor-head"><button type="button" (click)="closeCycleEditor()" aria-label="Back to reporting cycles">←</button><h3>{{ cycleEditorMode() === 'manual' ? 'Create a manual cycle' : cycle.periodLabel }}</h3></div>
+                    <fieldset class="cycle-details" [disabled]="cycleEditorMode()==='detail'">
+                    <div class="form-grid">
+                      <label class="report-field"><span>Reporting year</span><input name="reportingYear" type="number" [(ngModel)]="cycle.reportingYear" (ngModelChange)="onReportingYearChange($event)" required min="2000" max="9998"></label>
+                      <label class="report-field"><span>Period key</span><input name="periodKey" [(ngModel)]="cycle.periodKey" required maxlength="80" [placeholder]="'e.g. ' + cycle.reportingYear + '-10'"></label>
+                      <label class="report-field"><span>Period label</span><input name="periodLabel" [(ngModel)]="cycle.periodLabel" required maxlength="150" [placeholder]="'e.g. October ' + cycle.reportingYear"></label>
+                      <label class="report-field"><span>Period start</span><input name="periodStart" type="date" [(ngModel)]="cycle.periodStart" (ngModelChange)="onPeriodStartChange($event)" [min]="cycleYearStart()" [max]="cycleYearEnd()" required></label>
+                      <label class="report-field"><span>Period end</span><input name="periodEnd" type="date" [(ngModel)]="cycle.periodEnd" (ngModelChange)="onPeriodEndChange($event)" [min]="cycleYearStart()" [max]="cycleYearEnd()" required></label>
+                    </div>
+                    @if (cycleEditorMode()==='manual') {
+                      <div class="cycle-year-context"><div><strong>{{ cycle.reportingYear }} reporting year</strong><span>Both dates must be inside this year and may not overlap an existing period.</span></div><span class="cycle-periods">{{ manualYearCyclesSummary() }}</span></div>
+                      @if (manualCycleConflict(); as conflict) { <p class="error-banner cycle-conflict" role="alert">{{ conflict }}</p> }
+                    }
+                    @if (cycleEditorMode()==='manual' && cycleAssignmentsMissing()) { <p class="error-banner" role="alert">Complete the submitting division, assigned officers and recipients in Report Configuration and Components and Responsibilities before creating this cycle.</p> }
+                    <p class="cycle-deadline-note">Deadlines are calculated from this report's calendar-day rule. You may adjust them for this cycle before saving.</p>
+                    <div class="form-grid">@for (task of tasks; track $index; let i = $index) { <label class="report-field"><span>{{ task.type === 'BB' ? 'Final submission deadline (Asia/Dhaka)' : task.name + ' deadline (Asia/Dhaka)' }}</span><input type="datetime-local" [name]="'due'+i" [(ngModel)]="task.dueLocal" required></label> }</div>
+                    @if (cycleEditorMode()==='detail' && !tasks.length) { <p class="cycle-notice">No tasks were saved for this cycle.</p> }
+                    @if (cycleEditorMode()==='detail' && tasks.length && !hasSavedComponentTasks()) { <p class="cycle-notice">No component tasks were saved for this cycle.</p> }
+                    @if (cycleEditorMode()==='manual') { <div class="setup-actions"><button class="secondary" type="button" (click)="closeCycleEditor()">Cancel</button><button class="primary" type="submit" [disabled]="busy() || cycleForm.invalid || cycleAssignmentsMissing() || !!manualCycleConflict()">Create cycle manually</button></div> }
+                    </fieldset>
+                  </form>
+                }
+              </article>
             }
-          </form>
-            </article>
           } @else { <p class="setup-empty">Choose a report to view or create reporting cycles.</p> }
         </section>
       </section>
@@ -178,7 +221,7 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
   protected readonly activeTab = signal<SetupTab>('reports');
   protected readonly selectedReportId = signal('');
   protected readonly selectedReport = computed(() => this.reports().find(report => report.id === this.selectedReportId()));
-  protected readonly canGenerateYearly = computed(() => this.session.user()?.permissions.includes('administration.manage') ?? false);
+  protected readonly canGenerateCycles = computed(() => this.session.user()?.permissions.some(permission => permission === 'administration.manage' || permission === 'reports.manage') ?? false);
   protected readonly componentsOpened = signal(false);
   private readonly componentEditor = viewChild(ReportComponentEditorComponent);
   readonly changed = output<void>();
@@ -193,9 +236,14 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
   protected readonly message = signal('');
   protected readonly frequencies = signal<{ value: string; name: string }[]>([]);
   protected report = this.emptyReport();
-  protected cycle = { reportId: '', periodKey: '', periodLabel: '', periodStart: '', periodEnd: '' };
+  protected cycle = { reportId: '', reportingYear: this.currentYear(), periodKey: '', periodLabel: '', periodStart: '', periodEnd: '' };
   protected tasks = [this.newTask()];
   protected readonly savedCycles = signal<ReportingCycle[]>([]);
+  protected readonly cycleView = signal<CycleView>('list');
+  protected readonly cycleEditorMode = signal<CycleEditorMode>('list');
+  protected readonly cycleYear = signal('');
+  protected readonly cycleYears = computed(() => [...new Set(this.savedCycles().map(cycle => cycle.periodStart.slice(0, 4)))].sort((a, b) => b.localeCompare(a)));
+  protected readonly filteredCycles = computed(() => this.savedCycles().filter(cycle => !this.cycleYear() || cycle.periodStart.startsWith(this.cycleYear())));
   protected readonly cyclesLoading = signal(false);
   protected readonly cycleLoadError = signal('');
   protected savedCycleId = '';
@@ -222,17 +270,14 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
   protected hasOfficer(divisionId: string, id: string) { return this.officers(divisionId).some(u => u.id === id); }
   protected selectReport(reportId: string) {
     this.cycleRequest?.unsubscribe();
-    this.cycle = { reportId, periodKey: '', periodLabel: '', periodStart: '', periodEnd: '' };
+    this.cycle = { reportId, reportingYear: this.currentYear(), periodKey: '', periodLabel: '', periodStart: '', periodEnd: '' };
     this.savedCycleId = ''; this.savedCycles.set([]); this.cycleLoadError.set('');
+    this.cycleView.set('list'); this.cycleEditorMode.set('list'); this.cycleYear.set('');
     this.resetCycleDraft(); this.cyclesLoading.set(!!reportId);
     if (!reportId) return;
     this.cycleRequest = this.api.cycles(reportId).subscribe({
       next: cycles => {
         this.savedCycles.set(cycles); this.cyclesLoading.set(false);
-        const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dhaka', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-        const current = cycles.find(c => c.periodStart <= today && c.periodEnd >= today);
-        const previous = cycles.find(c => c.periodStart <= today);
-        this.selectCycle((current ?? previous ?? cycles.at(-1))?.id ?? '');
       },
       error: error => { this.cyclesLoading.set(false); this.cycleLoadError.set(apiError(error)); }
     });
@@ -241,11 +286,26 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
     const saved = this.savedCycles().find(c => c.id === id);
     this.savedCycleId = saved?.id ?? '';
     if (!saved) { this.resetCycleDraft(); return; }
-    this.cycle = { reportId: this.cycle.reportId, periodKey: saved.periodKey, periodLabel: saved.periodLabel, periodStart: saved.periodStart, periodEnd: saved.periodEnd };
+    this.cycle = { reportId: this.cycle.reportId, reportingYear: Number(saved.periodStart.slice(0, 4)), periodKey: saved.periodKey, periodLabel: saved.periodLabel, periodStart: saved.periodStart, periodEnd: saved.periodEnd };
     this.tasks = saved.obligations.map(task => ({ ...task, receivingDivisionId: task.receivingDivisionId ?? '', primaryOfficerId: task.primaryOfficerId ?? '', deputyOfficerId: task.deputyOfficerId ?? '',
       primaryOfficerName: task.primaryOfficerName ?? 'Unassigned', deputyOfficerName: task.deputyOfficerName ?? '',
       dueLocal: this.dhakaInputValue(task.dueAtUtc) }));
   }
+  protected openCycleGenerator() { if (this.canGenerateCycles()) this.cycleView.set('generate'); }
+  protected closeCycleGenerator() { this.cycleView.set('list'); }
+  protected finishCycleGeneration(count: number) {
+    const reportId = this.selectedReportId();
+    this.cycleView.set('list'); this.cycleEditorMode.set('list');
+    this.message.set(`${count} reporting ${count === 1 ? 'cycle' : 'cycles'} created successfully.`);
+    this.selectReport(reportId); this.changed.emit(); this.load(false);
+  }
+  protected openManualCycle() {
+    this.selectCycle('');
+    this.cycle.reportingYear = Number(this.cycleYear()) || this.currentYear();
+    this.cycleEditorMode.set('manual');
+  }
+  protected openCycleDetail(id: string) { this.selectCycle(id); this.cycleEditorMode.set('detail'); }
+  protected closeCycleEditor() { this.savedCycleId = ''; this.resetCycleDraft(); this.cycleEditorMode.set('list'); }
   private resetCycleDraft() {
     const report = this.reports().find(r => r.id === this.cycle.reportId);
     this.cycle = { ...this.cycle, periodKey: '', periodLabel: '', periodStart: '', periodEnd: '' };
@@ -255,6 +315,66 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
       if (!this.hasOfficer(task.divisionId, task.primaryOfficerId)) task.primaryOfficerId = '';
     }
     this.tasks = [task];
+  }
+  protected cycleYearStart() { return `${this.cycle.reportingYear}-01-01`; }
+  protected cycleYearEnd() { return `${this.cycle.reportingYear}-12-31`; }
+  protected onReportingYearChange(value: number | string) {
+    const year = Number(value);
+    this.cycle.reportingYear = Number.isInteger(year) ? year : this.currentYear();
+    if (this.cycle.periodStart && !this.cycle.periodStart.startsWith(`${this.cycle.reportingYear}-`)) this.cycle.periodStart = '';
+    if (this.cycle.periodEnd && !this.cycle.periodEnd.startsWith(`${this.cycle.reportingYear}-`)) this.cycle.periodEnd = '';
+  }
+  protected onPeriodStartChange(value: string) {
+    this.cycle.periodStart = value;
+    if (!value) return;
+    const year = Number(value.slice(0, 4));
+    if (year !== this.cycle.reportingYear) return;
+    const date = new Date(value + 'T00:00:00');
+    const report = this.selectedReport();
+    if (report?.frequency === 'Monthly') {
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      this.cycle.periodKey ||= `${year}-${month}`;
+      this.cycle.periodLabel ||= new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric' }).format(date);
+    }
+  }
+  protected onPeriodEndChange(value: string) {
+    this.cycle.periodEnd = value;
+    const finalTask = this.tasks.find(task => task.type === 'BB');
+    if (!value || !finalTask) return;
+    const report = this.selectedReport();
+    const dueTime = report?.dueTime?.slice(0, 5) || '17:00';
+    const deadlineDate = this.addCalendarDays(value, report?.reportDeadlineOffsetDays ?? 0);
+    finalTask.dueLocal = `${deadlineDate}T${dueTime}`;
+  }
+  private addCalendarDays(value: string, days: number) {
+    const date = new Date(`${value}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + Math.max(0, Number(days) || 0));
+    return date.toISOString().slice(0, 10);
+  }
+  protected manualYearCycles() {
+    const prefix = `${this.cycle.reportingYear}-`;
+    return this.savedCycles().filter(saved => saved.periodStart.startsWith(prefix)).sort((a, b) => a.periodStart.localeCompare(b.periodStart));
+  }
+  protected manualYearCyclesSummary() {
+    const cycles = this.manualYearCycles();
+    return cycles.length ? `Existing periods: ${cycles.map(item => item.periodLabel).join(', ')}` : 'No cycles exist for this year.';
+  }
+  protected manualCycleConflict() {
+    if (this.cycleEditorMode() !== 'manual') return '';
+    if (!Number.isInteger(Number(this.cycle.reportingYear)) || this.cycle.reportingYear < 2000 || this.cycle.reportingYear > 9998)
+      return 'Choose a valid reporting year.';
+    if ((this.cycle.periodStart && !this.cycle.periodStart.startsWith(`${this.cycle.reportingYear}-`)) ||
+        (this.cycle.periodEnd && !this.cycle.periodEnd.startsWith(`${this.cycle.reportingYear}-`)))
+      return 'Period start and period end must both be within the selected reporting year.';
+    if (!this.cycle.periodStart || !this.cycle.periodEnd) return '';
+    if (this.cycle.periodEnd < this.cycle.periodStart) return 'Period end cannot be earlier than period start.';
+    const cycles = this.manualYearCycles();
+    if (cycles.some(item => item.periodKey.toLowerCase() === this.cycle.periodKey.trim().toLowerCase()))
+      return 'This period key already exists for the selected report.';
+    if (cycles.some(item => item.periodStart === this.cycle.periodStart)) return 'A cycle already starts on this date.';
+    if (cycles.some(item => item.periodEnd === this.cycle.periodEnd)) return 'A cycle already ends on this date.';
+    const overlap = cycles.find(item => this.cycle.periodStart <= item.periodEnd && this.cycle.periodEnd >= item.periodStart);
+    return overlap ? `This period overlaps ${overlap.periodLabel} (${overlap.periodStart} to ${overlap.periodEnd}).` : '';
   }
   protected hasSavedComponentTasks() {
     return this.tasks.some(task => task.type === 'Internal');
@@ -300,10 +420,12 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
     this.selectTab(this.tabs[next].id);
     (event.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLButtonElement>('[role=tab]')[next]?.focus();
   }
-  private emptyReport() { return { code: '', name: '', reportTypeId: 2 as number | null, ownerDivisionId: this.session.user()?.divisionId ?? '', receivingDivisionId: '', submittingDivisionId: '', primarySubmittingOfficerId: '', deputySubmittingOfficerId: '', submissionRecipientId: '', submissionDepartmentIds: [] as string[], frequency: this.defaultFrequency(), dueTime: '17:00', componentDeadlineOffsetDays: 1, instructionReference: '', description: '' }; }
+  private emptyReport() { return { code: '', name: '', reportTypeId: 2 as number | null, ownerDivisionId: this.session.user()?.divisionId ?? '', receivingDivisionId: '', submittingDivisionId: '', primarySubmittingOfficerId: '', deputySubmittingOfficerId: '', submissionRecipientId: '', submissionDepartmentIds: [] as string[], frequency: this.defaultFrequency(), dueTime: '17:00', reportDeadlineOffsetDays: 0, componentDeadlineOffsetDays: 1, instructionReference: '', description: '' }; }
   private defaultFrequency() {
     return this.hasFrequency('Monthly') ? 'Monthly' : this.frequencies()[0]?.value ?? '';
   }
+
+  private currentYear() { return Number(new Intl.DateTimeFormat('en', { year: 'numeric', timeZone: 'Asia/Dhaka' }).format(new Date())); }
 
   protected hasFrequency(value: string) {
     return this.frequencies().some(frequency => frequency.value === value);
@@ -334,7 +456,7 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
     this.save(this.api.createReport({...this.report,dueTime,deputySubmittingOfficerId:this.report.deputySubmittingOfficerId || null}), 'Report created.', saved => { this.report=this.emptyReport(); this.selectedReportId.set(saved.id); this.selectTab('reports'); });
   }
   protected addCycle(form: NgForm) {
-    if (form.invalid || this.busy() || this.cycleAssignmentsMissing()) return;
+    if (form.invalid || this.busy() || this.cycleAssignmentsMissing() || this.manualCycleConflict()) return;
     if (this.savedCycleId || this.cyclesLoading() || this.cycleLoadError() || !this.cycle.reportId) return;
     const obligations = this.tasks.map(task => ({ ...task, receivingDivisionId: task.type === 'Internal' ? task.receivingDivisionId || null : null, deputyOfficerId: task.deputyOfficerId || null, dueAtUtc: new Date(task.dueLocal + '+06:00').toISOString() }));
     this.save(this.api.createCycle(this.cycle.reportId, { ...this.cycle, obligations }), 'Reporting cycle created. Obligations are now available in the trackers.', () => { this.selectReport(this.cycle.reportId); });

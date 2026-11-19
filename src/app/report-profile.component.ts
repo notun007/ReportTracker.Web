@@ -185,13 +185,14 @@ export class ReportProfileComponent {
       { label: 'Report name', value: report.name },
       { label: 'Report type', value: report.reportTypeName },
       { label: 'Frequency', value: report.frequency },
-      { label: 'Main deadline time', value: report.dueTime ? report.dueTime.slice(0, 5) + (report.timeZoneId ? ' (' + report.timeZoneId + ')' : '') : '—' },
+      { label: 'Report deadline rule', value: `Period end + ${report.reportDeadlineOffsetDays ?? 0} calendar day(s)` },
+      { label: 'Report submission time', value: report.dueTime ? report.dueTime.slice(0, 5) + (report.timeZoneId ? ' (' + report.timeZoneId + ')' : '') : '—' },
       { label: 'Coordinating division', value: this.divisionName(report.ownerDivisionId) },
       { label: 'Receiving division', value: this.divisionName(report.receivingDivisionId) },
       { label: 'Final submitting division', value: this.divisionName(report.submittingDivisionId) },
       { label: 'Final submitting officer', value: this.memberName(report.primarySubmittingOfficerId, 'Unassigned') },
       { label: 'Deputy submitting officer', value: this.memberName(report.deputySubmittingOfficerId, '—') },
-      { label: 'Deadline lead days', value: report.componentDeadlineOffsetDays ?? '—' },
+      { label: 'Default component deadline', value: report.componentDeadlineOffsetDays == null ? '—' : `${report.componentDeadlineOffsetDays} calendar day(s) before report deadline` },
       { label: 'Submission recipient', value: this.recipient()?.name || report.bbRecipient || 'Not configured' },
       { label: 'Instruction reference', value: report.instructionReference || '—' }
     ];

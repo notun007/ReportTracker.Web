@@ -10,6 +10,7 @@ import { AdministrationComponent } from './administration.component';
 import { ComponentResponsibilitiesComponent } from './component-responsibilities.component';
 import { ObligationOperationsComponent } from './obligation-operations.component';
 import { OperationsPagesComponent } from './operations-pages.component';
+import { NotificationService } from './notification.service';
 
 @Component({
   imports: [CommonModule, FormsModule, SignInComponent, WorkspaceSetupComponent, AdministrationComponent, ComponentResponsibilitiesComponent, ObligationOperationsComponent, OperationsPagesComponent],
@@ -17,6 +18,7 @@ import { OperationsPagesComponent } from './operations-pages.component';
 })
 export class App {
   protected readonly session = inject(SessionService);
+  protected readonly notifications = inject(NotificationService);
   private readonly api = inject(DashboardService);
   protected readonly ready = signal(false);
   protected readonly dashboard = signal<DashboardSummary | null>(null);

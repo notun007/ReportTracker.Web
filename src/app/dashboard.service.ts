@@ -86,8 +86,8 @@ export class DashboardService {
   calendar(fromUtc:string,toUtc:string) { return this.http.get<CalendarItem[]>('/api/operations/calendar',{params:{fromUtc,toUtc}}); }
   analytics() { return this.http.get<ManagementAnalytics>('/api/operations/analytics'); }
   generateCycles(through:string) { return this.http.post('/api/automation/generate-cycles',{}, {params:{through}}); }
-  previewYearlyCycles(year:number) { return this.http.get<YearlyCyclePreview>('/api/automation/yearly-cycles/preview',{params:{year}}); }
-  generateYearlyCycles(year:number) { return this.http.post<YearlyCycleGenerationResult>('/api/automation/yearly-cycles',{}, {params:{year}}); }
+  previewYearlyCycles(year:number, reportId?:string) { return this.http.get<YearlyCyclePreview>('/api/automation/yearly-cycles/preview',{params:{year,...(reportId ? {reportId} : {})}}); }
+  generateYearlyCycles(year:number, reportId:string|null, periodKeys?:string[]) { return this.http.post<YearlyCycleGenerationResult>('/api/automation/yearly-cycles',{reportId,periodKeys}, {params:{year}}); }
   changeUserStatus(id:string,isActive:boolean) { return this.http.patch<void>(`/api/setup/users/${id}/status`,{isActive}); }
   resetPassword(id:string,newPassword:string) { return this.http.post<void>(`/api/setup/users/${id}/reset-password`,{newPassword}); }
 }

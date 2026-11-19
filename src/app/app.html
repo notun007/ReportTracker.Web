@@ -69,4 +69,5 @@
   <dialog #operationsDialog class="modal operations-modal" aria-label="Submission controls" (cancel)="closeOperations()"><app-obligation-operations [row]="row" (closed)="closeOperations()" (changed)="reload()" /></dialog>
 }
 @if (toast()) { <div class="toast" role="status">✓ {{ toast() }}</div> }
+@if (notifications.toast(); as notice) { <div class="toast operation-toast" [class.error-toast]="notice.error" [attr.role]="notice.error ? 'alert' : 'status'"><span>{{ notice.text }}</span><button type="button" (click)="notifications.dismiss()" aria-label="Dismiss notification">×</button></div> }
 }

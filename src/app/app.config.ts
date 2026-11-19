@@ -2,6 +2,7 @@ import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/
 import { provideRouter } from '@angular/router';
 import { provideHttpClient, withInterceptors, withXsrfConfiguration } from '@angular/common/http';
 import { sessionXsrfRecovery } from './session-xsrf.interceptor';
+import { operationErrorNotifications } from './operation-error.interceptor';
 import { routes } from './app.routes';
 
 export const appConfig: ApplicationConfig = {
@@ -10,7 +11,7 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes),
     provideHttpClient(
       withXsrfConfiguration({ cookieName: 'ReportTracker.XSRF-TOKEN', headerName: 'X-XSRF-TOKEN' }),
-      withInterceptors([sessionXsrfRecovery])
+      withInterceptors([operationErrorNotifications, sessionXsrfRecovery])
     )
   ]
 };
