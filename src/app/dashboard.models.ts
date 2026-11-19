@@ -4,6 +4,7 @@ export interface Obligation {
   timeliness: string; sendingStatus: string; receiptStatus: string; evidenceStatus: string;
   recipient: string; rowVersion: string; canRecordSending: boolean; isAssignedToMe: boolean;
   requiredComponentCount: number; completedComponentCount: number; isReadyForSubmission: boolean;
+  pendingComponents: { id: string; name: string; sendingStatus: string; receiptStatus: string; evidenceStatus: string }[];
 }
 export interface DashboardSummary {
   myPending: number; dueToday: number; overdue: number; readyForSubmission: number; evidencePending: number;

@@ -84,10 +84,10 @@ export class App {
     this.loading.set(true); this.error.set('');
     this.api.getDashboard().subscribe({ next: data => { this.dashboard.set(data); this.loading.set(false); }, error: error => { this.loading.set(false); this.error.set(apiError(error)); if (error instanceof HttpErrorResponse && error.status === 401) this.session.user.set(null); } });
   }
-  protected navigate(view: string) { this.view.set(view); this.activeFilter.set('All'); this.search.set(''); if (window.innerWidth <= 760) this.navCollapsed.set(true); }
+  protected navigate(view: string) { this.view.set(view); this.clearFilters(); if (window.innerWidth <= 760) this.navCollapsed.set(true); }
   protected setFilter(filter: string) { this.activeFilter.set(filter); }
   protected clearFilters() { this.search.set(''); this.activeFilter.set('All'); this.divisionFilter.set('All divisions'); this.reportFilter.set('All reports'); this.ownerFilter.set('All owners'); this.deadlineFilter.set('All dates'); }
-  protected openRecord(row: Obligation) { if (!row.canRecordSending) return; this.form = { ...this.emptyForm(), recipient: row.recipient }; this.recordError.set(''); this.selected.set(row); }
+  protected openRecord(row: Obligation) { if (!row.canRecordSending || (row.type === 'BB' && !row.isReadyForSubmission)) return; this.form = { ...this.emptyForm(), recipient: row.recipient }; this.recordError.set(''); this.selected.set(row); }
   protected closeRecord(event?: Event) { if (this.saving()) { event?.preventDefault(); return; } this.selected.set(null); }
   protected saveRecord(form: NgForm) {
     const row = this.selected(); if (!row || form.invalid || this.saving()) return;
