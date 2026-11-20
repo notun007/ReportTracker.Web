@@ -15,9 +15,9 @@ export function flattenContributors(rows: ContributorSelection[]): ComponentCont
 
 export function contributorRows(row: ComponentDefinition): ContributorSelection[] {
   const entries = row.contributors ?? [
-    ...(row.primaryOfficerId ? [{userId:row.primaryOfficerId, role:'LeadPreparer' as const}] : []),
-    ...(row.deputyOfficerId && row.deputyOfficerId !== row.primaryOfficerId
-      ? [{userId:row.deputyOfficerId, role:'BackupPreparer' as const}] : [])
+    ...(row.primaryAssigneeId ? [{userId:row.primaryAssigneeId, role:'LeadPreparer' as const}] : []),
+    ...(row.alternateAssigneeId && row.alternateAssigneeId !== row.primaryAssigneeId
+      ? [{userId:row.alternateAssigneeId, role:'BackupPreparer' as const}] : [])
   ];
   const grouped = new Map<string, ContributorSelection>();
   for (const entry of entries) {

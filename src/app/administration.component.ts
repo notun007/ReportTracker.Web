@@ -1,15 +1,18 @@
+import { HttpClient } from '@angular/common/http';
+import { AccessCatalog, RoleAssignment } from './access.models';
+import { AccessManagementComponent } from './access-management.component';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, OnInit, WritableSignal, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule, NgForm } from '@angular/forms';
 import { Observable } from 'rxjs';
 import { DivisionItem, SubmissionRecipient, UserItem } from './dashboard.models';
-import { DashboardService, apiError } from './dashboard.service';
+import { DashboardService, SessionService, apiError } from './dashboard.service';
 
 import { SchedulePresetsComponent } from './schedule-presets.component';
 import { ReportingFrequenciesComponent } from './reporting-frequencies.component';
 
-type Screen = 'divisions' | 'users' | 'recipients' | 'departments' | 'frequencies' | 'schedules';
+type Screen = 'divisions' | 'users' | 'recipients' | 'departments' | 'frequencies' | 'schedules' | 'roles' | 'permissions';
 type Directory<T> = { rows: T[]; loading: boolean; error: string };
 type DuplicateField = 'code' | 'employeeId' | 'email' | 'organizationName' | 'departmentName';
 
@@ -21,16 +24,31 @@ const emptyUser = () => ({
 
 @Component({
   selector: 'app-administration',
-  imports: [FormsModule, SchedulePresetsComponent, ReportingFrequenciesComponent],
+  imports: [AccessManagementComponent, FormsModule, SchedulePresetsComponent, ReportingFrequenciesComponent],
   templateUrl: './administration.component.html',
   styleUrl: './administration.component.scss'
 })
 export class AdministrationComponent implements OnInit {
   private readonly api = inject(DashboardService);
+  private readonly http=inject(HttpClient);
+  protected readonly accessCatalog=signal<AccessCatalog|null>(null);
+  protected initialRoles:RoleAssignment[]=[];
+  protected addInitialRole(){this.initialRoles.push({roleId:'',scope:'',divisionId:null,reportDefinitionId:null});}
+  protected changeInitialScope(r:RoleAssignment){r.divisionId=null;r.reportDefinitionId=null;}
+  protected initialGlobalOnly(r:RoleAssignment){const c=this.accessCatalog();return c?.roles.find(x=>x.id===r.roleId)?.permissions.some(code=>c.permissions.some(p=>p.code===code&&p.globalOnly))??false;}
+  protected initialValid(){return this.initialRoles.every(r=>r.roleId&&r.scope&&(!this.initialGlobalOnly(r)||r.scope==='Global')&&(!['Division','DivisionReport'].includes(r.scope)||r.divisionId)&&(!['Report','DivisionReport'].includes(r.scope)||r.reportDefinitionId));}
+  protected readonly session = inject(SessionService);
+  protected readonly accessUser = signal('');
+  protected readonly editingUser = signal<UserItem|null>(null);
+  protected editUser(row:UserItem){this.editingUser.set(row);this.user={...emptyUser(),...row,mobileNumber:row.mobileNumber??'',password:''};}
+  protected cancelEdit(){this.editingUser.set(null);this.user=emptyUser();}
+  protected has(code:string){return this.session.user()?.permissions.includes(code)??false;}
   private readonly destroyRef = inject(DestroyRef);
   private toastTimer?: ReturnType<typeof setTimeout>;
 
-  protected readonly screens = [
+  private readonly allScreens = [
+    { id: 'roles', title: 'Roles', list: 'Roles', columns: [] },
+    { id: 'permissions', title: 'Permissions', list: 'Permissions', columns: [] },
     { id: 'divisions', title: 'Add division', list: 'Divisions', columns: ['Code', 'Division name', 'Status'] },
     { id: 'users', title: 'Add user', list: 'Users', columns: ['Employee ID', 'Name', 'Contact', 'Division', 'Roles', 'Status', 'Actions'] },
     { id: 'recipients', title: 'Submission recipients', list: 'Saved recipients', columns: ['Organization name', 'Departments'] },
@@ -39,6 +57,7 @@ export class AdministrationComponent implements OnInit {
     { id: 'schedules', title: 'Reporting Cycle Rules', list: 'Saved rules', columns: [] }
   ] as const;
 
+  protected get screens(){return this.allScreens.filter(s=>s.id==='users'?this.has('users.manage')||this.has('roles.manage'):s.id==='roles'||s.id==='permissions'?this.has('roles.manage')||this.has('users.manage'):s.id==='divisions'?this.has('divisions.manage'):this.has('administration.manage'));}
   protected readonly active = signal<Screen>('divisions');
   protected readonly screen = computed(() => this.screens.find(item => item.id === this.active())!);
   protected readonly divisions = signal(directory<DivisionItem>());
@@ -69,7 +88,7 @@ export class AdministrationComponent implements OnInit {
       case 'recipients': return this.filteredRecipients().length;
       case 'departments': return this.filteredDepartments().length;
       case 'frequencies': return 0;
-      case 'schedules': return 0;
+      case 'schedules': case 'roles': case 'permissions': return 0;
     }
   });
   protected readonly currentDirectory = computed(() => {
@@ -89,14 +108,17 @@ export class AdministrationComponent implements OnInit {
   }
 
   ngOnInit() {
-    this.loadDivisions();
-    this.loadUsers();
-    this.loadRecipients();
+    this.active.set(this.screens[0]?.id??'users');
+    if(this.has('roles.manage'))this.http.get<AccessCatalog>('/api/access/catalog').subscribe({next:c=>this.accessCatalog.set(c),error:e=>this.notify(apiError(e),true)});
+    if(this.has('divisions.manage')||this.has('users.manage')||this.has('roles.manage'))this.loadDivisions();
+    if(this.has('users.manage')||this.has('roles.manage'))this.loadUsers();
+    if(this.has('administration.manage'))this.loadRecipients();
   }
 
   protected navigate(screen: Screen) {
     if (screen === this.active() || this.busy()) return;
-    this.active.set(screen);
+    this.active.set(screen); this.accessUser.set(''); this.cancelEdit(); this.initialRoles=[];
+    if(screen==='users'&&this.has('roles.manage'))this.http.get<AccessCatalog>('/api/access/catalog').subscribe({next:c=>this.accessCatalog.set(c),error:e=>this.notify(apiError(e),true)});
     this.query.set('');
     this.duplicate.set(null);
     this.user.password = '';
@@ -142,7 +164,9 @@ export class AdministrationComponent implements OnInit {
     const employeeId = this.user.employeeId.trim();
     const email = normalize(this.user.email);
     const displayName = this.user.displayName.trim();
-    if (form.invalid || this.entryBlocked() || !employeeId || !email || !displayName) return;
+    if (form.invalid || this.entryBlocked() || !employeeId || !email || !displayName || !this.initialValid()) return;
+    const editing=this.editingUser();
+    if(editing){this.save(this.api.updateUser(editing.id,{displayName,email,mobileNumber:this.user.mobileNumber.trim()||null,divisionId:this.user.divisionId,rowVersion:editing.rowVersion}),'User updated.',()=>{this.cancelEdit();form.resetForm(this.user);this.loadUsers();});return;}
     if (this.users().rows.some(row => normalize(row.employeeId) === normalize(employeeId))) {
       this.showDuplicate('employeeId', 'An account with this employee ID already exists.');
       return;
@@ -151,8 +175,9 @@ export class AdministrationComponent implements OnInit {
       this.showDuplicate('email', 'An account with this email address already exists.');
       return;
     }
-    this.save(this.api.createUser({ ...this.user, employeeId, email, displayName, mobileNumber: this.user.mobileNumber.trim() || null }),
+    this.save(this.api.createUser({ ...this.user, roleAssignments:this.initialRoles, employeeId, email, displayName, mobileNumber: this.user.mobileNumber.trim() || null }),
       'User added.', () => {
+        this.initialRoles=[];
         this.query.set('');
         this.user = emptyUser();
         form.resetForm(this.user);
@@ -201,9 +226,7 @@ export class AdministrationComponent implements OnInit {
     if (this.busy()) return;
     const isActive = !user.isActive;
     this.save(this.api.changeUserStatus(user.id, isActive), isActive ? 'User activated.' : 'User deactivated.', () => {
-      this.users.update(state => ({
-        ...state, rows: state.rows.map(row => row.id === user.id ? { ...row, isActive } : row)
-      }));
+      this.loadUsers();
     });
   }
 
@@ -229,7 +252,7 @@ export class AdministrationComponent implements OnInit {
   }
 
   private loadDivisions() { this.loadDirectory(this.divisions, this.api.divisions()); }
-  private loadUsers() { this.loadDirectory(this.users, this.api.users()); }
+  protected loadUsers() { this.loadDirectory(this.users, this.api.users()); }
   private loadRecipients() { this.loadDirectory(this.recipients, this.api.submissionRecipients()); }
 
   private loadDirectory<T>(state: WritableSignal<Directory<T>>, request: Observable<T[]>) {

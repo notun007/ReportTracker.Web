@@ -1,10 +1,18 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
-import { catchError, switchMap, tap, throwError } from 'rxjs';
-import { WeeklyPresetPeriod, ReportingFrequencyItem, SchedulePresetDirectory, SchedulePresetItem, SchedulePresetPeriod, DivisionItem, ComponentContributor, Lookup, SubmissionDestination, SubmissionRecipient, ObligationActions, ReceiptItem, ReportingCycle, DashboardSummary, SendingRecord, SendingHistory, SessionResponse, SessionUser, Lookups, ReportDefinition, UserItem, ComponentDefinition, SubmissionReadiness, EvidenceItem, ExtensionItem, ReminderPolicy, NotificationItem, CalendarItem, ManagementAnalytics, YearlyCyclePreview, YearlyCycleGenerationResult } from './dashboard.models';
+import { catchError, switchMap, tap, throwError, timeout, TimeoutError } from 'rxjs';
+import { ComponentTeamDirectory, ReportResponsibilityAssignments, SaveReportResponsibilityAssignments, WeeklyPresetPeriod, ReportingFrequencyItem, SchedulePresetDirectory, SchedulePresetItem, SchedulePresetPeriod, DivisionItem, ComponentContributor, Lookup, SubmissionDestination, SubmissionRecipient, ReceivingOfficerDirectory, ObligationActions, ReceiptItem, ReportingCycle, DashboardSummary, SendingRecord, SendingHistory, SessionResponse, SessionUser, Lookups, ReportDefinition, UserItem, ComponentDefinition, SubmissionReadiness, EvidenceItem, ExtensionItem, ReminderPolicy, NotificationItem, CalendarItem, ManagementAnalytics, YearlyCyclePreview, YearlyCycleGenerationResult } from './dashboard.models';
+
+export const databaseUnavailableMessage = 'ReportTracker cannot connect to its database right now. Please retry. If the problem continues, contact your system administrator.';
+
+export function isRequestTimeout(error: unknown): boolean {
+  return error instanceof TimeoutError || error instanceof HttpErrorResponse && error.status === 408 && error.error?.code === 'request_timed_out';
+}
 
 export function apiError(error: unknown): string {
+  if (isRequestTimeout(error)) return 'The request took too long to complete. Refresh the screen to check the latest status before trying again.';
   if (error instanceof HttpErrorResponse) {
+    if (error.status === 503 && error.error?.code === 'database_unavailable') return databaseUnavailableMessage;
     if ([0, 502, 503, 504].includes(error.status)) return 'The API is unavailable. Start the ReportTracker API and retry the connection.';
     if (error.status === 401) return error.error?.title ?? 'Your session has expired. Please sign in again.';
     if (error.status === 403) return error.error?.detail ?? 'You do not have permission for this action.';
@@ -19,9 +27,17 @@ export class SessionService {
   readonly user = signal<SessionUser | null>(null);
   readonly setupRequired = signal(false);
   readonly available = signal(false);
+  readonly connectionIssue = signal<'database' | 'timeout' | 'api' | 'unexpected' | null>(null);
   load() { return this.http.get<SessionResponse>('/api/auth/session').pipe(
-    tap(data => { this.user.set(data.user); this.setupRequired.set(data.setupRequired); this.available.set(true); }),
-    catchError(error => { this.available.set(false); return throwError(() => error); })
+    timeout({ first: 30_000 }),
+    tap(data => { this.user.set(data.user); this.setupRequired.set(data.setupRequired); this.available.set(true); this.connectionIssue.set(null); }),
+    catchError(error => {
+      this.available.set(false); this.setupRequired.set(false);
+      this.connectionIssue.set(isRequestTimeout(error) ? 'timeout' :
+        error instanceof HttpErrorResponse && error.status === 503 && error.error?.code === 'database_unavailable' ? 'database' :
+        error instanceof HttpErrorResponse && [0, 502, 503, 504].includes(error.status) ? 'api' : 'unexpected');
+      return throwError(() => error);
+    })
   ); }
   login(body: unknown) { return this.load().pipe(switchMap(() => this.http.post('/api/auth/login', body)), switchMap(() => this.load())); }
   setup(body: unknown) { return this.load().pipe(switchMap(() => this.http.post('/api/auth/setup', body)), switchMap(() => this.load())); }
@@ -39,6 +55,8 @@ export class DashboardService {
   createSubmissionRecipient(name: string) { return this.http.post<Lookup>('/api/setup/submission-recipients', {name}); }
   createSubmissionDepartment(recipientId: string, name: string) { return this.http.post<Lookup>(`/api/setup/submission-recipients/${recipientId}/departments`, {name}); }
   createReport(body: unknown) { return this.http.post<{id:string}>('/api/setup/reports', body); }
+  reportResponsibilityAssignments(reportId:string) { return this.http.get<ReportResponsibilityAssignments>(`/api/report-definitions/${reportId}/responsibility-assignments`); }
+  saveReportResponsibilityAssignments(reportId:string,body:SaveReportResponsibilityAssignments) { return this.http.put<void>(`/api/report-definitions/${reportId}/responsibility-assignments`,body); }
   setReportResponsibilities(id:string,body:unknown) { return this.http.put<void>(`/api/setup/reports/${id}/responsibilities`,body); }
   cycles(id: string) { return this.http.get<ReportingCycle[]>(`/api/setup/reports/${id}/cycles`); }
   createCycle(id: string, body: unknown) { return this.http.post(`/api/setup/reports/${id}/cycles`, body); }
@@ -58,14 +76,20 @@ export class DashboardService {
   }
   divisions() { return this.http.get<DivisionItem[]>('/api/setup/divisions'); }
   users() { return this.http.get<UserItem[]>('/api/setup/users'); }
+  updateUser(id:string,body:unknown){return this.http.put('/api/setup/users/'+id,body);}
   createUser(body: unknown) { return this.http.post('/api/setup/users', body); }
   createDivision(body: unknown) { return this.http.post('/api/setup/divisions', body); }
+  saveComponentTeamMember(reportId:string,componentId:string,userId:string,roles:ComponentContributor['role'][]) { return this.http.put<ComponentDefinition>(`/api/report-definitions/${reportId}/components/${componentId}/contributors/${userId}`,{roles}); }
+  removeComponentTeamMember(reportId:string,componentId:string,userId:string) { return this.http.delete<ComponentDefinition>(`/api/report-definitions/${reportId}/components/${componentId}/contributors/${userId}`); }
+  componentTeams() { return this.http.get<ComponentTeamDirectory>('/api/component-teams'); }
   components(reportId: string) { return this.http.get<ComponentDefinition[]>(`/api/report-definitions/${reportId}/components`); }
   createComponent(reportId: string, body: unknown) { return this.http.post<ComponentDefinition>(`/api/report-definitions/${reportId}/components`, body); }
   setComponentContributors(reportId: string, componentId: string, contributors: ComponentContributor[]) {
     return this.http.put<ComponentDefinition>(`/api/report-definitions/${reportId}/components/${componentId}/contributors`, {contributors});
   }
   readiness(cycleId: string) { return this.http.get<SubmissionReadiness>(`/api/report-cycles/${cycleId}/readiness`); }
+  receivingOfficers(reportId:string,divisionId:string) { return this.http.get<ReceivingOfficerDirectory>(`/api/report-definitions/${reportId}/receiving-officers`,{params:{divisionId}}); }
+  setReceivingOfficers(reportId:string,divisionId:string,officerIds:string[],rowVersion:string) { return this.http.put<void>(`/api/report-definitions/${reportId}/receiving-officers`,{divisionId,officerIds,rowVersion}); }
   obligationActions(id:string) { return this.http.get<ObligationActions>(`/api/obligations/${id}/actions`); }
   receipts(id:string) { return this.http.get<ReceiptItem[]>(`/api/obligations/${id}/receipts`); }
   assignReceivingDivision(id:string,receivingDivisionId:string) { return this.http.patch<void>(`/api/obligations/${id}/receiving-division`,{receivingDivisionId}); }

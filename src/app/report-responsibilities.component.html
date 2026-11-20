@@ -1,0 +1,223 @@
+<header class="oa-header">
+  <div>
+    <h3>Responsibilities</h3>
+  </div>
+  @if (directory()) {
+    <div
+      class="oa-overview"
+      role="progressbar"
+      aria-label="Primary assignees selected"
+      aria-valuemin="0"
+      aria-valuemax="3"
+      [attr.aria-valuenow]="primaryCount()"
+    >
+      <div>
+        <strong>{{ primaryCount() }}<span> / 3</span></strong
+        ><span>Primary assignees selected</span>
+      </div>
+      <div class="oa-meter"><span [style.width.%]="(primaryCount() / 3) * 100"></span></div>
+    </div>
+  }
+</header>
+@if (loading()) {
+  <p role="status" class="oa-note">Loading responsibilities…</p>
+  <div class="oa-grid" aria-hidden="true">
+    @for (item of sections; track item.key) {
+      <div class="oa-skeleton"></div>
+    }
+  </div>
+}
+@if (error()) {
+  <div class="error-banner oa-feedback" role="alert">{{ error() }}</div>
+}
+@if (message()) {
+  <div
+    class="oa-toast"
+    (mouseenter)="pauseToast()"
+    (mouseleave)="resumeToast()"
+    (focusin)="pauseToast()"
+    (focusout)="resumeToast()"
+  >
+    <span class="oa-toast-icon" aria-hidden="true">✓</span>
+    <span role="status" aria-live="polite" aria-atomic="true">{{ message() }}</span>
+    <button type="button" (click)="dismissToast()" aria-label="Dismiss assignment notification">
+      ×
+    </button>
+  </div>
+}
+@if (directory(); as data) {
+  @if (data.existingReceiverCount > 2) {
+    <div class="error-banner oa-feedback" role="alert">
+      This report has more than two receiving officers. Review the existing Receiving officers list
+      before replacing it with a primary and alternate. No assignments have been changed.
+    </div>
+  }
+  <form #assignmentForm="ngForm" (ngSubmit)="save(assignmentForm)" [attr.aria-busy]="busy()">
+    <div class="oa-grid">
+      @for (section of sections; track section.key) {
+        @let info = data[section.key];
+        @let complete =
+          assignmentStatus(section.key) === 'Ready' || assignmentStatus(section.key) === 'Assigned';
+        <fieldset
+          class="oa-card"
+          [attr.data-role]="section.key"
+          [class.oa-complete]="complete"
+          [disabled]="busy() || loading()"
+        >
+          <legend class="sr-only">{{ section.label }}</legend>
+          <div class="oa-card-head">
+            <span class="oa-icon" aria-hidden="true"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                @switch (section.key) {
+                  @case ('controller') {
+                    <circle cx="9" cy="8" r="3" />
+                    <path d="M3 20v-2a6 6 0 0 1 12 0v2M17 5a3 3 0 0 1 0 6M21 20v-2a6 6 0 0 0-3-5" />
+                  }
+                  @case ('receiver') {
+                    <path d="M12 3v12m-4-4 4 4 4-4M4 14v6h16v-6" />
+                  }
+                  @case ('finalSubmission') {
+                    <path d="m21 3-7 18-4-8-8-4 19-6ZM10 13 21 3" />
+                  }
+                }</svg
+            ></span>
+            <div>
+              <h4>{{ section.label }}</h4>
+            </div>
+            <span class="oa-status" [class.oa-status-ready]="complete"
+              ><i aria-hidden="true"></i>{{ assignmentStatus(section.key) }}</span
+            >
+          </div>
+          <div class="oa-division">
+            <strong>{{ info.division }}</strong>
+          </div>
+          <div class="oa-field">
+            <label [for]="section.key + 'Primary'">Primary Assignee <span>Required</span></label>
+            <div
+              class="oa-select"
+              [class.oa-selected]="hasAssignee(info, form[section.key].primaryAssigneeId)"
+            >
+              <span class="oa-avatar" aria-hidden="true">{{
+                assigneeInitials(info, form[section.key].primaryAssigneeId)
+              }}</span>
+              <select
+                [id]="section.key + 'Primary'"
+                [name]="section.key + 'Primary'"
+                [ngModel]="form[section.key].primaryAssigneeId"
+                (ngModelChange)="selectPrimary(section.key, $event)"
+                required
+              >
+                <option value="">Choose primary assignee</option>
+                @if (
+                  form[section.key].primaryAssigneeId &&
+                  !hasAssignee(info, form[section.key].primaryAssigneeId)
+                ) {
+                  <option [value]="form[section.key].primaryAssigneeId" disabled>
+                    Previously assigned assignee is unavailable
+                  </option>
+                }
+                @for (assignee of info.assignees; track assignee.id) {
+                  <option [value]="assignee.id">{{ assignee.name }}</option>
+                }
+              </select>
+              <svg class="oa-chevron" viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  d="m4 6 4 4 4-4"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                />
+              </svg>
+            </div>
+          </div>
+          <div class="oa-field">
+            <label [for]="section.key + 'Alternate'">Alternate Assignee <span>Optional</span></label>
+            <div
+              class="oa-select"
+              [class.oa-selected]="hasAssignee(info, form[section.key].alternateAssigneeId)"
+            >
+              <span class="oa-avatar" aria-hidden="true">{{
+                assigneeInitials(info, form[section.key].alternateAssigneeId)
+              }}</span>
+              <select
+                [id]="section.key + 'Alternate'"
+                [name]="section.key + 'Alternate'"
+                [(ngModel)]="form[section.key].alternateAssigneeId"
+              >
+                <option value="">None</option>
+                @if (
+                  form[section.key].alternateAssigneeId &&
+                  !hasAssignee(info, form[section.key].alternateAssigneeId)
+                ) {
+                  <option [value]="form[section.key].alternateAssigneeId" disabled>
+                    Previously assigned assignee is unavailable
+                  </option>
+                }
+                @for (assignee of info.assignees; track assignee.id) {
+                  @if (assignee.id !== form[section.key].primaryAssigneeId) {
+                    <option [value]="assignee.id">{{ assignee.name }}</option>
+                  }
+                }
+              </select>
+              <svg class="oa-chevron" viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  d="m4 6 4 4 4-4"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                />
+              </svg>
+            </div>
+          </div>
+          @if (!info.divisionId) {
+            <p class="oa-card-note">
+              Configure this division in the report definition before saving assignments.
+            </p>
+          } @else if (!info.assignees.length) {
+            <p class="oa-card-note">No active officers are available in this division.</p>
+          }
+        </fieldset>
+      }
+    </div>
+    <footer class="oa-actions">
+      @if (busy() || valid()) {
+        <p aria-live="polite">
+          <span class="oa-save-dot" [class.oa-dirty]="hasChanges()"></span
+          >{{
+            busy()
+              ? 'Saving all three responsibilities…'
+              : hasChanges()
+                ? 'You have unsaved changes'
+                : 'No unsaved changes'
+          }}
+        </p>
+      }
+
+      <div>
+        <button class="oa-reload" type="button" (click)="load()" [disabled]="busy() || loading()">
+          <span aria-hidden="true">↻</span> Reload assignments</button
+        ><button
+          class="oa-save"
+          type="submit"
+          [disabled]="busy() || loading() || assignmentForm.invalid || !valid()"
+        >
+          @if (busy()) {
+            <span class="oa-spinner" aria-hidden="true"></span>
+          }
+          {{ busy() ? 'Saving…' : 'Save assignments' }}<span aria-hidden="true">→</span>
+        </button>
+      </div>
+    </footer>
+  </form>
+} @else if (!loading()) {
+  <button class="secondary" type="button" (click)="load()">Retry assignments</button>
+}

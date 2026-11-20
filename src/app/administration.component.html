@@ -5,7 +5,9 @@
   }
 </nav>
 
-@if (active() === 'frequencies') {
+@if(accessUser()) { <app-access-management mode="user" [userId]="accessUser()" (closed)="accessUser.set('')" (saved)="loadUsers()" /> }
+@else if(active()==='roles'||active()==='permissions') { <app-access-management [mode]="active()==='roles'?'roles':'permissions'" /> }
+@else if (active() === 'frequencies') {
   <app-reporting-frequencies (notification)="notify($event.text, $event.error)" />
 } @else if (active() === 'schedules') {
   <app-schedule-presets (notification)="notify($event.text, $event.error)" />
@@ -30,9 +32,9 @@
       </form>
     }
     @case ('users') {
-      <form class="report-inline-fields" #form="ngForm" (ngSubmit)="addUser(form)">
+      @if(has('users.manage')) { <form class="report-inline-fields" #form="ngForm" (ngSubmit)="addUser(form)">
         <label class="report-field"><span>Employee ID</span>
-          <input name="employeeId" [(ngModel)]="user.employeeId" (ngModelChange)="clearDuplicate('employeeId')" required maxlength="40"
+          <input name="employeeId" [readonly]="!!editingUser()" [(ngModel)]="user.employeeId" (ngModelChange)="clearDuplicate('employeeId')" required maxlength="40"
             [disabled]="busy()" [attr.aria-invalid]="duplicate()?.field === 'employeeId' || null" [attr.aria-describedby]="duplicate()?.field === 'employeeId' ? 'admin-duplicate' : null">
         </label>
         <label class="report-field"><span>Display name</span>
@@ -51,17 +53,21 @@
             @for (division of activeDivisions(); track division.id) { <option [value]="division.id">{{ division.name }}</option> }
           </select>
         </label>
-        <label class="report-field"><span>Temporary password</span>
+        @if(!editingUser()){<label class="report-field"><span>Temporary password</span>
           <input name="password" type="password" [(ngModel)]="user.password" required minlength="12" maxlength="128" autocomplete="new-password" [disabled]="busy()">
-        </label>
-        <label class="report-field"><span>Role</span>
-          <select name="isCoordinator" [(ngModel)]="user.isCoordinator" [disabled]="busy()">
-            <option [ngValue]="false">Assigned officer</option>
-            <option [ngValue]="true">Report Coordinator</option>
-          </select>
-        </label>
-        <div class="entry-actions"><button class="primary" type="submit" [disabled]="form.invalid || entryBlocked() || !user.employeeId.trim() || !user.displayName.trim()">Save user</button></div>
-      </form>
+        </label> }
+@if(!editingUser()&&has('roles.manage')){
+<div class="initial-access"><h3>Initial access (optional)</h3>
+@for(r of initialRoles;track $index;let i=$index){<div class="initial-role">
+<label>Role<select [name]="'newRole'+i" [(ngModel)]="r.roleId" required><option value="">Choose role</option>@for(role of accessCatalog()?.roles;track role.id){@if(role.isActive){<option [value]="role.id">{{role.name}}</option>}}</select></label>
+<label>Scope<select [name]="'newScope'+i" [(ngModel)]="r.scope" (ngModelChange)="changeInitialScope(r)" required><option value="">Choose scope</option><option value="Global">Global</option>@if(!initialGlobalOnly(r)){<option value="Division">Division</option><option value="Report">Report</option><option value="DivisionReport">Division within report</option>}</select></label>
+@if(r.scope==='Division'||r.scope==='DivisionReport'){<label>Division<select [name]="'newDivision'+i" [(ngModel)]="r.divisionId" required><option [ngValue]="null">Choose division</option>@for(d of accessCatalog()?.divisions;track d.id){<option [value]="d.id">{{d.name}}</option>}</select></label>}
+@if(r.scope==='Report'||r.scope==='DivisionReport'){<label>Report<select [name]="'newReport'+i" [(ngModel)]="r.reportDefinitionId" required><option [ngValue]="null">Choose report</option>@for(report of accessCatalog()?.reports;track report.id){<option [value]="report.id">{{report.code}} · {{report.name}}</option>}</select></label>}
+<button type="button" (click)="initialRoles.splice(i,1)">Remove</button></div>}
+<button type="button" (click)="addInitialRole()" [disabled]="!accessCatalog()||busy()||initialRoles.length>=50">Add role</button></div>
+}
+        <div class="entry-actions"><button class="primary" type="submit" [disabled]="form.invalid || entryBlocked() || !initialValid() || !user.employeeId.trim() || !user.displayName.trim()">{{editingUser()?'Update user':'Save user'}}</button>@if(editingUser()){<button type="button" (click)="cancelEdit()">Cancel</button>}</div>
+      </form> }
     }
     @case ('recipients') {
       <form class="report-inline-fields" #form="ngForm" (ngSubmit)="addRecipient(form)">
@@ -116,13 +122,16 @@
             @for (row of filteredUsers(); track row.id) {
               <tr><td>{{ row.employeeId }}</td><td><strong>{{ row.displayName }}</strong></td>
                 <td>{{ row.email }} @if (row.mobileNumber) { <span>{{ row.mobileNumber }}</span> }</td>
-                <td>{{ divisionName(row.divisionId) }}</td><td>{{ row.roles.join(', ') || 'Assigned officer' }}</td>
+                <td>{{ divisionName(row.divisionId) }}</td><td>{{ row.roles.join(', ') || 'No roles' }}</td>
                 <td><span class="status" [class.sent]="row.isActive">{{ row.isActive ? 'Active' : 'Inactive' }}</span></td>
                 <td><div class="row-actions">
+                  @if(has('roles.manage')) { <button type="button" class="link-button" (click)="accessUser.set(row.id)">Manage access</button> }
+                  @if(has('users.manage')) {
+                  <button type="button" class="link-button" (click)="editUser(row)">Edit user</button>
                   <button type="button" class="link-button" [disabled]="busy()" (click)="toggleUser(row)"
                     [attr.aria-label]="(row.isActive ? 'Deactivate ' : 'Activate ') + row.displayName">{{ row.isActive ? 'Deactivate' : 'Activate' }}</button>
                   <button type="button" class="link-button" [disabled]="busy()" (click)="resetPassword(row)"
-                    [attr.aria-label]="'Reset password for ' + row.displayName">Reset password</button>
+                    [attr.aria-label]="'Reset password for ' + row.displayName">Reset password</button> }
                 </div></td>
               </tr>
             }

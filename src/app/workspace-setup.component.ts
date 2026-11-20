@@ -1,3 +1,4 @@
+import { ReportResponsibilityAssignmentsComponent } from './report-responsibilities.component';
 import { Component, OnInit, OnDestroy, computed, inject, output, signal, viewChild } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { forkJoin, Observable, Subscription } from 'rxjs';
@@ -9,7 +10,7 @@ import { ReportComponentEditorComponent } from './report-component-editor.compon
 import { ReportProfileComponent } from './report-profile.component';
 import { YearlyCycleGeneratorComponent } from './yearly-cycle-generator.component';
 
-type SetupTab = 'reports' | 'create' | 'profile' | 'components' | 'cycles';
+type SetupTab = 'reports' | 'create' | 'profile' | 'components' | 'cycles' | 'assignments';
 type CycleView = 'list' | 'generate';
 type CycleEditorMode = 'list' | 'detail' | 'manual';
 
@@ -23,7 +24,7 @@ const reportFrequencyByCode = new Map([
 ]);
 
 @Component({
-  selector: 'app-workspace-setup', imports: [FormsModule, ReportComponentEditorComponent, ReportProfileComponent, SubmissionDestinationPickerComponent, YearlyCycleGeneratorComponent],
+  selector: 'app-workspace-setup', imports: [FormsModule, ReportComponentEditorComponent, ReportProfileComponent, SubmissionDestinationPickerComponent, YearlyCycleGeneratorComponent, ReportResponsibilityAssignmentsComponent],
   styles: [`
     .cycle-details { display:grid; gap:14px; min-width:0; margin:0; padding:0; border:0; }
     .cycle-create-action { justify-self:end; }
@@ -34,6 +35,7 @@ const reportFrequencyByCode = new Map([
     .cycle-list-actions { display:flex; align-items:end; gap:8px; flex-wrap:wrap; }
     .cycle-year { min-width:125px; }
     .setup-tab-panel.cycle-panel { max-height:none; overflow:visible; }
+    .setup-tab-panel.assignment-panel { max-height:none; overflow:visible; }
     .cycle-table-wrap { overflow:visible; }
     .cycle-table { min-width:0; table-layout:fixed; }
     .cycle-table th,.cycle-table td { padding-inline:10px; }
@@ -103,8 +105,8 @@ const reportFrequencyByCode = new Map([
                   <td><strong>{{ recipientName(r) }}</strong><span>{{ r.submissionDepartmentIds?.length ?? 0 }} {{ r.submissionDepartmentIds?.length===1 ? 'department' : 'departments' }}</span></td><td>{{ r.cycleCount }}</td>
                   <td><div class="report-row-actions">
                     <button class="link-button" type="button" (click)="openReportTab(r.id,'profile')" [attr.aria-label]="'Report profile for '+r.code" [disabled]="workspaceBusy()">Profile</button>
-                    <button class="link-button" type="button" (click)="openReportTab(r.id,'components')" [attr.aria-label]="'Components for '+r.code" [disabled]="workspaceBusy()">Components</button>
-                    <button class="link-button" type="button" (click)="openReportTab(r.id,'cycles')" [attr.aria-label]="'Reporting cycles for '+r.code" [disabled]="workspaceBusy()">Cycles</button>
+                    <button class="link-button" type="button" (click)="openReportTab(r.id,'components')" [attr.aria-label]="'Components for '+r.code" [disabled]="workspaceBusy()||!canOpen('components')">Components</button>
+                    <button class="link-button" type="button" (click)="openReportTab(r.id,'cycles')" [attr.aria-label]="'Reporting cycles for '+r.code" [disabled]="workspaceBusy()||!canOpen('cycles')">Cycles</button>
                   </div></td>
                 </tr>
               } @empty { <tr><td colspan="7" class="empty">No reports configured yet.</td></tr> }
@@ -119,8 +121,7 @@ const reportFrequencyByCode = new Map([
           <label class="report-field"><span>Report type</span><select name="reportTypeId" [(ngModel)]="report.reportTypeId" required><option [ngValue]="null">Choose report type</option>@for (type of lookups().reportTypes; track type.id) { <option [ngValue]="type.id">{{ type.name }}</option> }</select></label>
           <label class="report-field"><span>Coordinating division</span><select name="ownerDivisionId" [(ngModel)]="report.ownerDivisionId" required><option value="">Choose division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
           <label class="report-field"><span>Receiving division</span><select name="reportReceivingDivision" [(ngModel)]="report.receivingDivisionId" required><option value="">Choose receiving division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
-          <label class="report-field"><span>Final submitting division</span><select name="submittingDivisionId" [(ngModel)]="report.submittingDivisionId" (ngModelChange)="report.primarySubmittingOfficerId = ''; report.deputySubmittingOfficerId = ''" required><option value="">Choose final submitting division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
-          <label class="report-field"><span>Final submitting officer</span><select name="primarySubmittingOfficerId" [ngModel]="report.primarySubmittingOfficerId" (ngModelChange)="selectFinalSubmitter($event)" required><option value="">Choose officer</option>@for (u of officers(report.submittingDivisionId); track u.id) { <option [value]="u.id">{{ u.name }}</option> }</select></label>
+          <label class="report-field"><span>Final submitting division</span><select name="submittingDivisionId" [(ngModel)]="report.submittingDivisionId" required><option value="">Choose final submitting division</option>@for (d of lookups().divisions; track d.id) { <option [value]="d.id">{{ d.name }}</option> }</select></label>
           <label class="report-field"><span>Frequency</span>
             <select name="frequency" [(ngModel)]="report.frequency" required [disabled]="!frequencies().length">
               <option value="">Choose a frequency</option>
@@ -132,12 +133,10 @@ const reportFrequencyByCode = new Map([
           <label class="report-field"><span>Report deadline after period end</span><input name="reportDeadlineOffsetDays" type="number" min="0" max="365" [(ngModel)]="report.reportDeadlineOffsetDays" required><small>Calendar days</small></label>
           <label class="report-field"><span>Report submission time</span><input name="dueTime" type="time" [(ngModel)]="report.dueTime" required><small>Asia/Dhaka</small></label>
           <label class="report-field"><span>Component deadline before report deadline</span><input name="componentDeadlineOffsetDays" type="number" min="0" max="365" [(ngModel)]="report.componentDeadlineOffsetDays" required><small>Default calendar-day lead</small></label>
-          <div class="deadline-formula report-description" role="note"><strong>Deadline rule</strong><span>Report: period end + {{ report.reportDeadlineOffsetDays || 0 }} calendar day(s), at {{ report.dueTime || '17:00' }}. Components: {{ report.componentDeadlineOffsetDays || 0 }} calendar day(s) before the report deadline.</span></div>
           <app-submission-destination-picker class="report-description" [recipients]="submissionRecipients()" [destination]="report"
             [disabled]="busy()" (destinationChange)="updateReportDestination($event)" />
           <details class="report-optional report-description"><summary>Optional fields</summary>
             <div class="form-grid">
-          <label class="report-field"><span>Deputy submitting officer (optional)</span><select name="deputySubmittingOfficerId" [(ngModel)]="report.deputySubmittingOfficerId"><option value="">None</option>@for (u of deputySubmitters(); track u.id) { <option [value]="u.id">{{ u.name }}</option> }</select></label>
           <label class="report-field"><span>Instruction reference</span><input name="instructionReference" [(ngModel)]="report.instructionReference" maxlength="250"></label>
           <label class="report-description report-field"><span>Description</span><textarea name="description" [(ngModel)]="report.description" maxlength="1000" rows="2"></textarea></label>
             </div>
@@ -209,19 +208,25 @@ const reportFrequencyByCode = new Map([
             }
           } @else { <p class="setup-empty">Choose a report to view or create reporting cycles.</p> }
         </section>
+        <section class="setup-tab-panel assignment-panel" role="tabpanel" id="setup-panel-assignments" aria-labelledby="setup-tab-assignments" [hidden]="activeTab()!=='assignments'">
+          @if (activeTab()==='assignments') {
+            @if (selectedReport(); as selected) { <app-report-responsibilities [reportId]="selected.id" (saving)="assignmentSaving.set($event)" (saved)="officerAssignmentsSaved()" /> }
+            @else { <p class="setup-empty">Choose a report to assign officers.</p> }
+          }
+        </section>
       </section>
     }
   `
 })
 export class WorkspaceSetupComponent implements OnInit, OnDestroy {
-  protected readonly tabs: {id:SetupTab; label:string}[] = [
-    {id:'reports',label:'Directory'}, {id:'create',label:'Create'}, {id:'cycles',label:'Cycles'},
+  protected get tabs(): {id:SetupTab; label:string}[] { return ([
+    {id:'reports',label:'Directory'}, {id:'create',label:'Create'}, {id:'cycles',label:'Cycles'}, {id:'assignments',label:'Responsibilities'},
     {id:'components',label:'Components'}, {id:'profile',label:'Profile'}
-  ];
+  ] as {id:SetupTab;label:string}[]).filter(t=>{const code=({create:'reports.manage',cycles:'cycles.manage',assignments:'responsibilities.manage',components:'components.manage'} as Record<string,string>)[t.id];return !code||!!this.session.user()?.permissions.includes(code);}); }
   protected readonly activeTab = signal<SetupTab>('reports');
   protected readonly selectedReportId = signal('');
   protected readonly selectedReport = computed(() => this.reports().find(report => report.id === this.selectedReportId()));
-  protected readonly canGenerateCycles = computed(() => this.session.user()?.permissions.some(permission => permission === 'administration.manage' || permission === 'reports.manage') ?? false);
+  protected readonly canGenerateCycles = computed(() => this.session.user()?.permissions.some(permission => permission === 'cycles.manage') ?? false);
   protected readonly componentsOpened = signal(false);
   private readonly componentEditor = viewChild(ReportComponentEditorComponent);
   readonly changed = output<void>();
@@ -232,6 +237,7 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
   protected readonly reports = signal<ReportDefinition[]>([]);
   protected readonly loading = signal(true);
   protected readonly busy = signal(false);
+  protected readonly assignmentSaving = signal(false);
   protected readonly error = signal('');
   protected readonly message = signal('');
   protected readonly frequencies = signal<{ value: string; name: string }[]>([]);
@@ -287,8 +293,8 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
     this.savedCycleId = saved?.id ?? '';
     if (!saved) { this.resetCycleDraft(); return; }
     this.cycle = { reportId: this.cycle.reportId, reportingYear: Number(saved.periodStart.slice(0, 4)), periodKey: saved.periodKey, periodLabel: saved.periodLabel, periodStart: saved.periodStart, periodEnd: saved.periodEnd };
-    this.tasks = saved.obligations.map(task => ({ ...task, receivingDivisionId: task.receivingDivisionId ?? '', primaryOfficerId: task.primaryOfficerId ?? '', deputyOfficerId: task.deputyOfficerId ?? '',
-      primaryOfficerName: task.primaryOfficerName ?? 'Unassigned', deputyOfficerName: task.deputyOfficerName ?? '',
+    this.tasks = saved.obligations.map(task => ({ ...task, receivingDivisionId: task.receivingDivisionId ?? '', primaryAssigneeId: task.primaryAssigneeId ?? '', alternateAssigneeId: task.alternateAssigneeId ?? '',
+      primaryAssigneeName: task.primaryAssigneeName ?? 'Unassigned', alternateAssigneeName: task.alternateAssigneeName ?? '',
       dueLocal: this.dhakaInputValue(task.dueAtUtc) }));
   }
   protected openCycleGenerator() { if (this.canGenerateCycles()) this.cycleView.set('generate'); }
@@ -311,8 +317,8 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
     this.cycle = { ...this.cycle, periodKey: '', periodLabel: '', periodStart: '', periodEnd: '' };
     const task = this.newTask();
     if (report) {
-      task.recipient = report.submissionDestination ?? report.bbRecipient; task.divisionId = report.submittingDivisionId ?? ''; task.primaryOfficerId = report.primarySubmittingOfficerId ?? ''; task.deputyOfficerId = report.deputySubmittingOfficerId ?? '';
-      if (!this.hasOfficer(task.divisionId, task.primaryOfficerId)) task.primaryOfficerId = '';
+      task.recipient = report.submissionDestination ?? report.bbRecipient; task.divisionId = report.submittingDivisionId ?? ''; task.primaryAssigneeId = report.primarySubmittingAssigneeId ?? ''; task.alternateAssigneeId = report.alternateSubmittingAssigneeId ?? '';
+      if (!this.hasOfficer(task.divisionId, task.primaryAssigneeId)) task.primaryAssigneeId = '';
     }
     this.tasks = [task];
   }
@@ -386,11 +392,15 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
     return Number.isFinite(timestamp) ? new Date(timestamp + 6 * 60 * 60 * 1000).toISOString().slice(0, 16) : '';
   }
 
-  protected cycleAssignmentsMissing() { return this.tasks.some(task=>!task.divisionId || !task.primaryOfficerId || !this.hasOfficer(task.divisionId,task.primaryOfficerId) || !task.recipient.trim() || (task.deputyOfficerId && !this.hasOfficer(task.divisionId,task.deputyOfficerId)) || (task.type==='Internal' && task.receiptRequired && !task.receivingDivisionId)); }
+  protected cycleAssignmentsMissing() { return this.tasks.some(task=>!task.divisionId || !task.primaryAssigneeId || !this.hasOfficer(task.divisionId,task.primaryAssigneeId) || !task.recipient.trim() || (task.alternateAssigneeId && !this.hasOfficer(task.divisionId,task.alternateAssigneeId)) || (task.type==='Internal' && task.receiptRequired && !task.receivingDivisionId)); }
   protected divisionName(id: string | null) { return this.lookups().divisions.find(d => d.id === id)?.name ?? 'Not configured'; }
-  protected workspaceBusy() { return this.busy() || (this.componentEditor()?.isSaving() ?? false); }
+  protected workspaceBusy() { return this.assignmentSaving() || this.busy() || (this.componentEditor()?.isSaving() ?? false); }
   protected recipientName(report: ReportDefinition) {
     return this.submissionRecipients().find(item => item.id === report.submissionRecipientId)?.name ?? report.bbRecipient;
+  }
+  protected officerAssignmentsSaved() {
+    this.changed.emit();
+    this.api.reports().subscribe({ next: reports => this.reports.set(reports), error: error => this.error.set(apiError(error)) });
   }
   protected chooseReport(id: string) {
     if (this.workspaceBusy() || id === this.selectedReportId()) return;
@@ -403,8 +413,9 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
     this.chooseReport(id);
     this.selectTab(tab);
   }
+  protected canOpen(tab:SetupTab){return this.tabs.some(t=>t.id===tab);}
   protected selectTab(tab: SetupTab) {
-    if (this.workspaceBusy()) return;
+    if (this.workspaceBusy() || !this.tabs.some(t=>t.id===tab)) return;
     if (tab !== this.activeTab()) this.error.set('');
     if (tab === 'components') this.componentsOpened.set(true);
     if (tab === 'cycles' && this.cycle.reportId !== this.selectedReportId()) this.selectReport(this.selectedReportId());
@@ -420,7 +431,7 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
     this.selectTab(this.tabs[next].id);
     (event.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLButtonElement>('[role=tab]')[next]?.focus();
   }
-  private emptyReport() { return { code: '', name: '', reportTypeId: 2 as number | null, ownerDivisionId: this.session.user()?.divisionId ?? '', receivingDivisionId: '', submittingDivisionId: '', primarySubmittingOfficerId: '', deputySubmittingOfficerId: '', submissionRecipientId: '', submissionDepartmentIds: [] as string[], frequency: this.defaultFrequency(), dueTime: '17:00', reportDeadlineOffsetDays: 0, componentDeadlineOffsetDays: 1, instructionReference: '', description: '' }; }
+  private emptyReport() { return { code: '', name: '', reportTypeId: 2 as number | null, ownerDivisionId: this.session.user()?.divisionId ?? '', receivingDivisionId: '', submittingDivisionId: '', submissionRecipientId: '', submissionDepartmentIds: [] as string[], frequency: this.defaultFrequency(), dueTime: '17:00', reportDeadlineOffsetDays: 0, componentDeadlineOffsetDays: 1, instructionReference: '', description: '' }; }
   private defaultFrequency() {
     return this.hasFrequency('Monthly') ? 'Monthly' : this.frequencies()[0]?.value ?? '';
   }
@@ -439,29 +450,18 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
   protected updateReportDestination(destination: SubmissionDestination) {
     this.report = {...this.report, ...destination};
   }
-  protected selectFinalSubmitter(id: string) {
-    this.report.primarySubmittingOfficerId = id;
-    if (this.report.deputySubmittingOfficerId === id) this.report.deputySubmittingOfficerId = '';
-  }
-  protected deputySubmitters() {
-    return this.officers(this.report.submittingDivisionId).filter(person => person.id !== this.report.primarySubmittingOfficerId);
-  }
   protected addReport(form: NgForm) {
     if (form.invalid || !this.hasFrequency(this.report.frequency) || !this.validDestination(this.report) || this.busy()) return;
-    if (this.report.primarySubmittingOfficerId === this.report.deputySubmittingOfficerId) {
-      this.error.set('Choose a different deputy submitting officer or select None.');
-      return;
-    }
     const dueTime = this.report.dueTime.length === 5 ? this.report.dueTime + ':00' : this.report.dueTime;
-    this.save(this.api.createReport({...this.report,dueTime,deputySubmittingOfficerId:this.report.deputySubmittingOfficerId || null}), 'Report created.', saved => { this.report=this.emptyReport(); this.selectedReportId.set(saved.id); this.selectTab('reports'); });
+    this.save(this.api.createReport({...this.report,dueTime}), 'Report created.', saved => { this.report=this.emptyReport(); this.selectedReportId.set(saved.id); this.selectTab('reports'); });
   }
   protected addCycle(form: NgForm) {
     if (form.invalid || this.busy() || this.cycleAssignmentsMissing() || this.manualCycleConflict()) return;
     if (this.savedCycleId || this.cyclesLoading() || this.cycleLoadError() || !this.cycle.reportId) return;
-    const obligations = this.tasks.map(task => ({ ...task, receivingDivisionId: task.type === 'Internal' ? task.receivingDivisionId || null : null, deputyOfficerId: task.deputyOfficerId || null, dueAtUtc: new Date(task.dueLocal + '+06:00').toISOString() }));
+    const obligations = this.tasks.map(task => ({ ...task, receivingDivisionId: task.type === 'Internal' ? task.receivingDivisionId || null : null, alternateAssigneeId: task.alternateAssigneeId || null, dueAtUtc: new Date(task.dueLocal + '+06:00').toISOString() }));
     this.save(this.api.createCycle(this.cycle.reportId, { ...this.cycle, obligations }), 'Reporting cycle created. Obligations are now available in the trackers.', () => { this.selectReport(this.cycle.reportId); });
   }
-  private newTask() { return { name: 'Final submission', type: 'BB', divisionId: this.session.user()?.divisionId ?? '', primaryOfficerId: this.session.user()?.id ?? '', deputyOfficerId: '', receivingDivisionId: '', divisionName: '', primaryOfficerName: '', deputyOfficerName: '', recipient: '', dueLocal: '', receiptRequired: false, evidenceRequired: false }; }
+  private newTask() { return { name: 'Final submission', type: 'BB', divisionId: this.session.user()?.divisionId ?? '', primaryAssigneeId: this.session.user()?.id ?? '', alternateAssigneeId: '', receivingDivisionId: '', divisionName: '', primaryAssigneeName: '', alternateAssigneeName: '', recipient: '', dueLocal: '', receiptRequired: false, evidenceRequired: false }; }
   private save<T>(request: Observable<T>, message: string, reset: (value:T) => void) {
     this.busy.set(true); this.error.set(''); this.message.set('');
     request.subscribe({ next: value => { this.busy.set(false); reset(value); this.message.set(message); this.changed.emit(); this.load(false); }, error: error => { this.busy.set(false); this.error.set(apiError(error)); } });

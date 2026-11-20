@@ -1,3 +1,4 @@
+import { ReceivingOfficersComponent } from './receiving-officers.component';
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject, input, output, signal } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
@@ -6,7 +7,7 @@ import { DashboardService, apiError } from './dashboard.service';
 import { EvidenceItem, Obligation, ObligationActions, ReceiptItem } from './dashboard.models';
 
 @Component({
-  selector: 'app-obligation-operations', imports: [CommonModule, FormsModule],
+  selector: 'app-obligation-operations', imports: [CommonModule, FormsModule, ReceivingOfficersComponent],
   styles: [`.role-note { margin:0; padding:12px 22px; background:var(--surface); color:var(--muted); line-height:1.6; } .receipt-history article { padding:12px 0; border-top:1px solid var(--line); } .receipt-history span { display:block; margin-top:5px; color:var(--muted); } details { margin:12px 0; padding:12px; border:1px solid var(--line); border-radius:6px; } summary { cursor:pointer; font-weight:600; }`],
   template: `
     <div class="modal-header"><div><h2>Submission controls</h2><p>{{ row().report }} · {{ row().period }} · {{ row().obligation }}</p></div><button class="icon-button" type="button" (click)="closed.emit()" aria-label="Close">×</button></div>
@@ -47,14 +48,15 @@ import { EvidenceItem, Obligation, ObligationActions, ReceiptItem } from './dash
                 <button class="primary" type="submit" [disabled]="busy() || receiptForm.invalid">{{ permissions.isExternalReceipt ? 'Record recipient acknowledgment' : 'Confirm receipt' }}</button>
               </form>
             } @else {
-              <p>{{ !permissions.hasSending ? 'Receipt can be recorded after a submission has been recorded.' : permissions.isExternalReceipt ? 'A separate authorized coordinator records the recipient acknowledgment. Senders can view the history here.' : permissions.receivingDivisionName ? 'An officer in ' + permissions.receivingDivisionName + ' confirms receipt. Sending officers can view the history here.' : 'A coordinator must assign the receiving division before an internal officer can confirm receipt.' }}</p>
+              <p>{{ !permissions.hasSending ? 'Receipt can be recorded after a submission has been recorded.' : permissions.isExternalReceipt ? 'A separate authorized coordinator records the recipient acknowledgment. Senders can view the history here.' : permissions.receivingDivisionName ? 'A designated receiving officer in ' + permissions.receivingDivisionName + ' confirms receipt. Division membership alone does not grant authority.' : 'A coordinator must assign the receiving division before an internal officer can confirm receipt.' }}</p>
             }
             @if (permissions.canAssignReceiver) {
-              <details><summary>Receiving responsibility</summary><p>Choose the division whose officers can confirm this handover. The sender remains excluded.</p>
+              <details><summary>Receiving responsibility</summary><p>Choose the receiving division, then assign named receiving officers. The sender remains excluded.</p>
                 <form #receiverForm="ngForm" (ngSubmit)="assignReceiver(receiverForm)"><label>Receiving division<select name="receivingDivision" [(ngModel)]="receivingDivisionId" required><option value="">Choose receiving division</option>@for (division of permissions.receivingDivisions; track division.id) { <option [value]="division.id">{{ division.name }}</option> }</select></label><button class="primary" type="submit" [disabled]="busy() || receiverForm.invalid || receivingDivisionId === permissions.receivingDivisionId">Save receiving division</button></form>
               </details>
             }
           </section>
+          @if (permissions.canManageReceivingOfficers && permissions.receivingDivisionId) { <section><app-receiving-officers [reportId]="reportId()" [divisionId]="permissions.receivingDivisionId" (changed)="changed.emit(); load()" /></section> }
           <section class="receipt-history"><h3>Receipt history</h3>@for (item of receipts(); track item.id) { <article><strong>{{ item.isDisputed ? 'Disputed' : 'Received' }} · {{ item.receivedAtUtc | date:'dd MMM y, HH:mm':'+0600' }}</strong><span>Recorded by {{ item.actor }} · {{ item.recordedAtUtc | date:'dd MMM y, HH:mm':'+0600' }}</span>@if (item.reason) { <p>{{ item.reason }}</p> }</article> } @empty { <p>No receipt confirmation recorded.</p> }</section>
         }
         @if (tab() === 'Amendment' && permissions.canAmendStatus) {
@@ -65,14 +67,14 @@ import { EvidenceItem, Obligation, ObligationActions, ReceiptItem } from './dash
   `
 })
 export class ObligationOperationsComponent implements OnInit {
-  readonly row = input.required<Obligation>(); readonly closed = output<void>(); readonly changed = output<void>();
+  readonly row = input.required<Obligation>(); readonly reportId = input.required<string>(); readonly initialTab = input<'Evidence' | 'Receipt'>('Evidence'); readonly closed = output<void>(); readonly changed = output<void>();
   private readonly api = inject(DashboardService);
   protected readonly tab = signal('Evidence'); protected readonly evidence = signal<EvidenceItem[]>([]);
   protected readonly receipts = signal<ReceiptItem[]>([]); protected readonly actions = signal<ObligationActions | null>(null);
   protected readonly loading = signal(true); protected readonly busy = signal(false); protected readonly error = signal(''); protected readonly message = signal('');
   protected file: File | null = null; protected receivingDivisionId = '';
   protected receipt = { receivedLocal: '', isDisputed: false, reason: '' }; protected amendment = { replacementStatus: 'Not Sent', reason: '' };
-  ngOnInit() { this.load(); }
+  ngOnInit() { this.tab.set(this.initialTab()); this.load(); }
   protected availableActions() { const a = this.actions(); return [a?.canUploadEvidence ? 'Upload sending proof' : '', a?.canReviewEvidence ? 'Review other officers’ evidence' : '', a?.canConfirmReceipt ? 'Confirm receipt' : ''].filter(Boolean).join(' · ') || 'View history'; }
   protected load() {
     this.loading.set(true); this.error.set('');

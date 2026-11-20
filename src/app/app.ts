@@ -1,3 +1,4 @@
+import { ComponentTeamsComponent } from './component-teams.component';
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
@@ -13,7 +14,7 @@ import { OperationsPagesComponent } from './operations-pages.component';
 import { NotificationService } from './notification.service';
 
 @Component({
-  imports: [CommonModule, FormsModule, SignInComponent, WorkspaceSetupComponent, AdministrationComponent, ComponentResponsibilitiesComponent, ObligationOperationsComponent, OperationsPagesComponent],
+  imports: [CommonModule, FormsModule, SignInComponent, WorkspaceSetupComponent, AdministrationComponent, ComponentTeamsComponent, ComponentResponsibilitiesComponent, ObligationOperationsComponent, OperationsPagesComponent],
   selector: 'app-root', styleUrl: './app.scss', templateUrl: './app.html'
 })
 export class App {
@@ -46,11 +47,11 @@ export class App {
   private readonly operationsDialog = viewChild<ElementRef<HTMLDialogElement>>('operationsDialog');
   protected form = this.emptyForm();
   protected readonly today = new Intl.DateTimeFormat('en-GB', { dateStyle: 'full', timeZone: 'Asia/Dhaka' }).format(new Date());
-  protected readonly canSetup = computed(() => this.session.user()?.permissions.includes('reports.manage') ?? false);
-  protected readonly canAdmin = computed(() => this.session.user()?.permissions.includes('administration.manage') ?? false);
+  protected readonly canSetup = computed(() => this.session.user()?.permissions.some(p=>['reports.manage','cycles.manage','components.manage','responsibilities.manage','reports.monitor'].includes(p)) ?? false);
+  protected readonly canAdmin = computed(() => this.session.user()?.permissions.some(p=>['administration.manage','users.manage','divisions.manage','roles.manage'].includes(p)) ?? false);
   protected readonly navigation = computed(() => [
-    'Reporting Overview', 'Report Register', ...(this.canSetup() ? ['Report Configuration', 'Components and Responsibilities'] : []),
-    'Component Submission', 'Submission Readiness', 'Main Report Submission', 'Deadline Extensions', 'Reminder Settings', 'Reporting Calendar'
+    'Reporting Overview', 'Report Register', ...(this.canSetup() ? ['Report Configuration'] : []),
+    ...(this.session.user()?.permissions.includes('components.manage')?['Components and Responsibilities']:[]), ...(this.session.user()?.permissions.includes('component.teams.manage')?['Component Teams']:[]), 'Component Submission', 'Incoming Components', 'Submission Readiness', 'Main Report Submission', 'Deadline Extensions', 'Reminder Settings', 'Reporting Calendar'
   ]);
   protected readonly divisions = computed(() => [...new Map((this.dashboard()?.upcoming ?? []).filter(row => row.divisionId && row.division).map(row => [row.divisionId, { id: row.divisionId, name: row.division }])).values()].sort((a, b) => a.name.localeCompare(b.name)));
   protected readonly reports = computed(() => this.unique((this.dashboard()?.upcoming ?? []).map(row => row.report)));
@@ -58,7 +59,8 @@ export class App {
   protected readonly filtered = computed(() => {
     const filter = this.activeFilter(); const term = this.search().trim().toLowerCase(); const view = this.view();
     return (this.dashboard()?.upcoming ?? []).filter(row =>
-      (view !== 'Component Submission' || row.type === 'Internal') &&
+      (view !== 'Component Submission' || (row.type === 'Internal' && (row.isAssignedToMe || row.canRecordSending))) &&
+      (view !== 'Incoming Components' || (row.type === 'Internal' && row.isAssignedReceiver)) &&
       (!['Submission Readiness', 'Main Report Submission'].includes(view) || row.type === 'BB') &&
       (filter === 'All' || (filter === 'My Pending' && row.isAssignedToMe && row.sendingStatus !== 'Sent') || row.timeliness === filter || row.type === filter || row.sendingStatus === filter ||
         (filter === 'Evidence Pending' && ['Missing', 'Provided', 'Rejected'].includes(row.evidenceStatus))) &&
@@ -108,7 +110,7 @@ export class App {
   protected statusClass(value: string) { return value.toLowerCase().replaceAll(' ', '-'); }
   protected navIcon(item: string) { return ({
     'Reporting Overview':'⌂', 'Report Register':'▤', 'Report Configuration':'⚙', 'Components and Responsibilities':'◫',
-    'Component Submission':'✓', 'Submission Readiness':'◷', 'Main Report Submission':'↗', 'Deadline Extensions':'◴',
+    'Component Teams':'♧', 'Component Submission':'✓', 'Incoming Components':'↓', 'Submission Readiness':'◷', 'Main Report Submission':'↗', 'Deadline Extensions':'◴',
     'Reminder Settings':'♢', 'Reporting Calendar':'□'
   } as Record<string,string>)[item] ?? '•'; }
   protected readinessPercent(row: Obligation) { return row.requiredComponentCount ? Math.round(row.completedComponentCount / row.requiredComponentCount * 100) : 0; }

@@ -1,0 +1,173 @@
+<section class="page-intro">
+  <div>
+    <h2>Component teams</h2>
+  </div>
+  <button class="secondary" type="button" (click)="load()" [disabled]="loading() || saving()">
+    Refresh teams
+  </button>
+</section>
+@if (error()) {
+  <div class="error-banner" role="alert">
+    {{ error() }}
+    @if ((reloadRequired() || !selected()) && !loading()) {
+      <button type="button" (click)="load()">Retry teams</button>
+    }
+  </div>
+}
+@if (loading()) {
+  <p role="status">Loading component teams…</p>
+} @else if (reports().length) {
+  <section class="setup-card team-selectors" aria-label="Choose component team">
+    <label
+      ><span>Report</span
+      ><select
+        [ngModel]="reportId()"
+        (ngModelChange)="chooseReport($event)"
+        [disabled]="saving() || reloadRequired()"
+      >
+        @for (report of reports(); track report.id) {
+          <option [value]="report.id">{{ report.code }} — {{ report.name }}</option>
+        }
+      </select></label
+    >
+    <label
+      ><span>Component</span
+      ><select
+        [ngModel]="componentId()"
+        (ngModelChange)="chooseComponent($event)"
+        [disabled]="saving() || reloadRequired()"
+      >
+        @for (row of components(); track row.component.id) {
+          <option [value]="row.component.id">{{ row.component.name }}</option>
+        }
+      </select></label
+    >
+  </section>
+  @if (selected(); as row) {
+    <section class="setup-card team-editor" aria-label="Component team">
+      @if (row.component.description) {
+        <p class="description">{{ row.component.description }}</p>
+      }
+      <form
+        class="report-inline-fields"
+        (ngSubmit)="assignment.saveEntry()"
+        [attr.aria-busy]="saving()"
+      >
+        <app-contributor-assignment-table
+          #assignment
+          [showTable]="false"
+          [persistImmediately]="true"
+          [rows]="team()"
+          [members]="members()"
+          [disabled]="saving() || reloadRequired()"
+          (saveMember)="saveMember($event)"
+          (removeMemberRequested)="removeMember($event)"
+        />
+        @if (!members().length) {
+          <p class="error-banner" role="status">
+            No active team members are available in this preparing division. Ask your administrator
+            to check its user accounts.
+          </p>
+        }
+        @if (saving()) {
+          <p class="write-status" role="status">Saving changes and reloading the team…</p>
+        }
+        @if (!reloadRequired()) {
+          <section
+            class="team-summary"
+            aria-labelledby="team-summary-heading"
+            aria-live="polite"
+            aria-atomic="false"
+          >
+            <header class="team-summary-head">
+              <h3 id="team-summary-heading">Team overview</h3>
+              <span class="member-count"
+                >{{ team().length }} {{ team().length === 1 ? 'member' : 'members' }}</span
+              >
+            </header>
+            <div
+              class="team-table-scroll"
+              tabindex="0"
+              role="region"
+              aria-label="Team members table"
+            >
+              <table aria-label="Team overview">
+                <thead>
+                  <tr>
+                    <th scope="col" class="row-number">#</th>
+                    <th scope="col">Team member</th>
+                    <th scope="col">Contributor roles</th>
+                    <th scope="col" class="summary-actions-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (member of team(); track member.userId; let i = $index) {
+                    <tr>
+                      <td class="row-number">{{ i + 1 }}</td>
+                      <td>
+                        <div class="summary-member">
+                          <span class="member-avatar" aria-hidden="true">{{
+                            memberInitials(member.userId)
+                          }}</span
+                          ><strong>{{ memberName(member.userId) }}</strong>
+                        </div>
+                      </td>
+                      <td>
+                        <div class="role-tags">
+                          @for (role of member.roles; track role) {
+                            <span class="role-tag" [attr.data-role]="role">{{
+                              roleLabels[role]
+                            }}</span>
+                          } @empty {
+                            <span class="roles-pending">Choose roles</span>
+                          }
+                        </div>
+                      </td>
+                      <td>
+                        <div class="summary-actions">
+                          <button
+                            type="button"
+                            class="link-button"
+                            [disabled]="
+                              saving() || reloadRequired() || !isActiveMember(member.userId)
+                            "
+                            [attr.aria-label]="'Edit ' + memberName(member.userId)"
+                            (click)="assignment.editMember(member.userId)"
+                          >
+                            Edit</button
+                          ><button
+                            type="button"
+                            class="link-button"
+                            [disabled]="
+                              saving() || reloadRequired() || assignment.hasPendingEntry()
+                            "
+                            [attr.aria-label]="'Remove ' + memberName(member.userId)"
+                            (click)="removeMember(member.userId)"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  } @empty {
+                    <tr>
+                      <td colspan="4" class="summary-empty">No team members selected.</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </section>
+        }
+      </form>
+    </section>
+  }
+} @else if (!error()) {
+  <section class="setup-card">
+    <h3>No components available</h3>
+    <p>
+      No component teams are available for your division and report permissions. Components must
+      first be defined and routed to a preparing division.
+    </p>
+  </section>
+}

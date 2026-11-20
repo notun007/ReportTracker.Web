@@ -1,8 +1,8 @@
 export interface Obligation {
-  id: string; cycleId: string; report: string; period: string; obligation: string;
+  id: string; cycleId: string; reportId: string; report: string; period: string; obligation: string;
   type: 'Internal' | 'BB' | 'Correction'; owner: string; divisionId: string; division: string; dueAtUtc: string;
   timeliness: string; sendingStatus: string; receiptStatus: string; evidenceStatus: string;
-  recipient: string; rowVersion: string; canRecordSending: boolean; isAssignedToMe: boolean;
+  recipient: string; rowVersion: string; canRecordSending: boolean; isAssignedToMe: boolean; isAssignedReceiver?: boolean;
   requiredComponentCount: number; completedComponentCount: number; isReadyForSubmission: boolean;
   pendingComponents: { id: string; name: string; sendingStatus: string; receiptStatus: string; evidenceStatus: string }[];
 }
@@ -29,14 +29,14 @@ export interface SubmissionDestination { submissionRecipientId: string; submissi
 export interface ReportDefinition {
   dueTime?: string | null; reportDeadlineOffsetDays?: number; componentDeadlineOffsetDays?: number | null; timeZoneId?: string | null;
   instructionReference?: string | null; description?: string | null;
-  submissionRecipientId?: string | null; submissionDepartmentIds?: string[]; submissionDestination?: string; id: string; code: string; name: string; reportTypeId: number; reportTypeName: string; ownerDivisionId: string; bbRecipient: string; frequency: string; cycleCount: number; receivingDivisionId: string | null; submittingDivisionId: string | null; primarySubmittingOfficerId: string | null; deputySubmittingOfficerId: string | null; }
-export interface UserItem { id: string; displayName: string; email: string; mobileNumber: string | null; employeeId: string; divisionId: string; isActive: boolean; roles: string[]; }
+  submissionRecipientId?: string | null; submissionDepartmentIds?: string[]; submissionDestination?: string; id: string; code: string; name: string; reportTypeId: number; reportTypeName: string; ownerDivisionId: string; bbRecipient: string; frequency: string; cycleCount: number; receivingDivisionId: string | null; submittingDivisionId: string | null; primarySubmittingAssigneeId: string | null; alternateSubmittingAssigneeId: string | null; }
+export interface UserItem { id: string; displayName: string; email: string; mobileNumber: string | null; employeeId: string; divisionId: string; isActive: boolean; roles: string[]; rowVersion:string; }
 export type ContributorRole = 'LeadPreparer' | 'Preparer' | 'BackupPreparer' | 'Reviewer';
 export interface ComponentContributor { userId: string; role: ContributorRole; }
 export interface ComponentDefinition {
   contributors?: ComponentContributor[];
   id: string; definitionVersionId: string; name: string; description: string | null;
-  providerDivisionId: string; primaryOfficerId: string | null; deputyOfficerId: string | null; receivingDivisionId: string;
+  providerDivisionId: string; primaryAssigneeId: string | null; alternateAssigneeId: string | null; receivingDivisionId: string;
   deadlineOffsetDays: number;
 }
 export interface ReadinessComponent {
@@ -67,14 +67,14 @@ export interface ReportingCycle {
 }
 export interface CycleObligation {
   name: string; type: string; divisionId: string; divisionName: string;
-  primaryOfficerId: string | null; primaryOfficerName: string | null;
-  deputyOfficerId: string | null; deputyOfficerName: string | null;
+  primaryAssigneeId: string | null; primaryAssigneeName: string | null;
+  alternateAssigneeId: string | null; alternateAssigneeName: string | null;
   recipient: string; dueAtUtc: string; receiptRequired: boolean; evidenceRequired: boolean; receivingDivisionId: string | null;
 }
 export interface ObligationActions {
   canUploadEvidence:boolean; canConfirmReceipt:boolean; canReviewEvidence:boolean; canAmendStatus:boolean;
   isExternalReceipt:boolean; hasSending:boolean; receivingDivisionId:string|null; receivingDivisionName:string|null;
-  canAssignReceiver:boolean; receivingDivisions:Lookup[];
+  canAssignReceiver:boolean; receivingDivisions:Lookup[]; canManageReceivingOfficers?:boolean;
 }
 export interface ReceiptItem { id:string; sendingEventId:string; receivedAtUtc:string; isDisputed:boolean; reason:string|null; recordedAtUtc:string; actor:string; }
 export interface ReportingFrequencyItem { id:number; code:string; name:string; displayOrder:number; }
@@ -83,3 +83,13 @@ export interface WeeklyPresetPeriod { startDay:number; endDay:number | null; sta
 export interface SchedulePresetItem { id:string; ruleCode:string; name:string; version:number; displayOrder:number; reportingPeriod:string; finalDeadline:string; weeklyPeriods?:WeeklyPresetPeriod[] | null; }
 export interface SchedulePresetDirectory { rules:SchedulePresetRule[]; saved:SchedulePresetItem[]; }
 export interface SchedulePresetPeriod { periodStart:string; periodEnd:string; finalDeadline:string; }
+
+export interface ReceivingOfficerDirectory { reportId:string; divisionId:string; division:string; officers:Lookup[]; selectedOfficerIds:string[]; rowVersion:string; }
+
+export interface AssigneePair { primaryAssigneeId:string; alternateAssigneeId:string|null; }
+export interface ResponsibilitySection { divisionId:string|null; division:string; assignees:Lookup[]; primaryAssigneeId:string|null; alternateAssigneeId:string|null; }
+export interface ReportResponsibilityAssignments { reportId:string; report:string; rowVersion:string; controller:ResponsibilitySection; receiver:ResponsibilitySection; finalSubmission:ResponsibilitySection; existingReceiverCount:number; }
+export interface SaveReportResponsibilityAssignments { controller:AssigneePair; receiver:AssigneePair; finalSubmission:AssigneePair; rowVersion:string; }
+
+export interface ComponentTeamItem { reportId:string; reportCode:string; reportName:string; preparingDivision:string; component:ComponentDefinition; }
+export interface ComponentTeamDirectory { components:ComponentTeamItem[]; members:(Lookup & {divisionId:string})[]; }

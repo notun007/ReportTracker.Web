@@ -1,4 +1,5 @@
-import { ComponentContributorsComponent, ContributorSelection, contributorError, contributorRoleNames, contributorRows, flattenContributors } from './component-contributors.component';
+import { ReceivingOfficersComponent } from './receiving-officers.component';
+import { ContributorSelection, contributorRoleNames, contributorRows } from './component-contributors.component';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { forkJoin } from 'rxjs';
@@ -7,7 +8,7 @@ import { DashboardService, apiError } from './dashboard.service';
 
 @Component({
   selector: 'app-component-responsibilities',
-  imports: [FormsModule, ComponentContributorsComponent],
+  imports: [FormsModule, ReceivingOfficersComponent],
   template: `
     <section class="page-intro">
       <div><h2>Components and responsibilities</h2><p>Define the mandatory inputs that must be ready before a main report can be submitted.</p></div>
@@ -16,7 +17,7 @@ import { DashboardService, apiError } from './dashboard.service';
     @if (message()) { <div class="success-banner" role="status">{{ message() }}</div> }
     <section class="workflow-layout">
       <aside class="setup-card component-editor">
-        <h3>Add report component</h3>
+        <h3>Add report component</h3><p>Team entry is managed separately by the preparing division under Component Teams.</p>
         <form #componentForm="ngForm" (ngSubmit)="save(componentForm)">
           <label>Report<select name="reportId" [disabled]="saving()" [(ngModel)]="reportId" (ngModelChange)="loadComponents()" required><option value="">Choose report</option>@for (report of reports(); track report.id) { <option [value]="report.id">{{ report.code }} — {{ report.name }}</option> }</select></label>
           @if (reportId && !reportReceiver()) { <p role="status">Set the receiving division in Report Configuration before adding components to this report.</p> }
@@ -25,10 +26,7 @@ import { DashboardService, apiError } from './dashboard.service';
           <div class="form-grid">
             <label>Preparing division<select name="providerDivisionId" [(ngModel)]="form.providerDivisionId" (ngModelChange)="form.contributors=[]" required><option value="">Choose division</option>@for (division of lookups().divisions; track division.id) { <option [value]="division.id">{{ division.name }}</option> }</select></label>
           </div>
-          <app-component-contributors [rows]="form.contributors" [members]="officers(form.providerDivisionId)" [disabled]="saving()" (rowsChange)="form.contributors=$event" />
-          @if (form.providerDivisionId && officers(form.providerDivisionId).length === 0) {
-            <div class="error-banner" role="status">No active team members are assigned to {{ divisionName(form.providerDivisionId) }}. Ask a System Administrator to create users for this division under Administration → Add user. <button type="button" (click)="refreshOfficers()" [disabled]="refreshingOfficers()">{{ refreshingOfficers() ? 'Refreshing…' : 'Refresh team members' }}</button></div>
-          }
+
           <button class="primary" type="submit" [disabled]="saving() || componentForm.invalid || !reportId || !reportReceiver()">{{ saving() ? 'Saving…' : 'Add component' }}</button>
         </form>
       </aside>
@@ -40,6 +38,7 @@ import { DashboardService, apiError } from './dashboard.service';
         </tbody></table></div>
       </section>
     </section>
+    @if (reportId && reportReceiver(); as receiver) { <section class="setup-card"><app-receiving-officers [reportId]="reportId" [divisionId]="receiver" /></section> }
   `
 })
 export class ComponentResponsibilitiesComponent implements OnInit {
@@ -87,10 +86,8 @@ export class ComponentResponsibilitiesComponent implements OnInit {
   }
   protected save(form: NgForm) {
     if (!this.reportId || !this.reportReceiver() || form.invalid || this.saving()) return;
-    const validation = contributorError(this.form.contributors,this.officers(this.form.providerDivisionId));
-    if (validation) { this.error.set(validation); return; }
     this.saving.set(true); this.error.set(''); this.message.set('');
-    this.api.createComponent(this.reportId, { ...this.form, contributors:flattenContributors(this.form.contributors), receivingDivisionId: this.reportReceiver() }).subscribe({
+    this.api.createComponent(this.reportId, { ...this.form, contributors:[], receivingDivisionId: this.reportReceiver() }).subscribe({
       next: row => { this.components.update(rows => [...rows, row].sort((a, b) => a.name.localeCompare(b.name))); this.form = this.emptyForm(); form.resetForm({ ...this.form, reportId: this.reportId }); this.message.set('Component saved. This defines an input for reporting cycles; existing cycles are unchanged.'); this.saving.set(false); },
       error: error => { this.error.set(apiError(error)); this.saving.set(false); }
     });

@@ -190,8 +190,8 @@ export class ReportProfileComponent {
       { label: 'Coordinating division', value: this.divisionName(report.ownerDivisionId) },
       { label: 'Receiving division', value: this.divisionName(report.receivingDivisionId) },
       { label: 'Final submitting division', value: this.divisionName(report.submittingDivisionId) },
-      { label: 'Final submitting officer', value: this.memberName(report.primarySubmittingOfficerId, 'Unassigned') },
-      { label: 'Deputy submitting officer', value: this.memberName(report.deputySubmittingOfficerId, '—') },
+      { label: 'Primary submitting assignee', value: this.memberName(report.primarySubmittingAssigneeId, 'Unassigned') },
+      { label: 'Alternate submitting assignee', value: this.memberName(report.alternateSubmittingAssigneeId, '—') },
       { label: 'Default component deadline', value: report.componentDeadlineOffsetDays == null ? '—' : `${report.componentDeadlineOffsetDays} calendar day(s) before report deadline` },
       { label: 'Submission recipient', value: this.recipient()?.name || report.bbRecipient || 'Not configured' },
       { label: 'Instruction reference', value: report.instructionReference || '—' }
