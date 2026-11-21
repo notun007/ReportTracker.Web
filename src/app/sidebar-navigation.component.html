@@ -1,0 +1,19 @@
+<nav class="sidebar-navigation" [class.is-collapsed]="collapsed()" aria-label="Primary navigation">
+  @for (group of groups(); track group.id) {
+    <section class="nav-group" [class.group-current]="active(group)" [class.group-open]="expandedGroup()===group.id" [attr.data-tone]="group.tone">
+      <button class="group-toggle" type="button" [attr.aria-expanded]="!collapsed() && expandedGroup()===group.id" [attr.aria-controls]="'nav-items-'+group.id" [attr.aria-label]="group.title" [attr.title]="collapsed() ? group.title : null" (click)="toggle(group)">
+        <span class="gloss-icon group-icon" aria-hidden="true"><app-menu-icon [name]="group.icon" /></span>
+        <span class="group-label">{{group.title}}</span>
+        <svg class="group-chevron" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="m5 3 5 5-5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+      </button>
+      <ul class="group-items" [id]="'nav-items-'+group.id" [hidden]="collapsed() || expandedGroup()!==group.id" [attr.aria-label]="group.title+' screens'">
+        @for (item of group.items; track item.title) {
+          <li><button class="menu-item" type="button" [class.item-current]="activeView()===item.title" [attr.aria-current]="activeView()===item.title ? 'page' : null" (click)="open(group,item.title)">
+            <span class="gloss-icon item-icon" aria-hidden="true"><app-menu-icon [name]="item.icon" /></span>
+            <span class="item-label">{{item.title}}</span><span class="current-dot" aria-hidden="true"></span>
+          </button></li>
+        }
+      </ul>
+    </section>
+  }
+</nav>

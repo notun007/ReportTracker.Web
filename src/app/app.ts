@@ -1,3 +1,5 @@
+import { SidebarNavigationComponent } from './sidebar-navigation.component';
+import { administrationDestinations, readSidebarState, sidebarGroups, sidebarStorageKey } from './sidebar-menu';
 import { ComponentTeamsComponent } from './component-teams.component';
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -14,7 +16,7 @@ import { OperationsPagesComponent } from './operations-pages.component';
 import { NotificationService } from './notification.service';
 
 @Component({
-  imports: [CommonModule, FormsModule, SignInComponent, WorkspaceSetupComponent, AdministrationComponent, ComponentTeamsComponent, ComponentResponsibilitiesComponent, ObligationOperationsComponent, OperationsPagesComponent],
+  imports: [SidebarNavigationComponent, CommonModule, FormsModule, SignInComponent, WorkspaceSetupComponent, AdministrationComponent, ComponentTeamsComponent, ComponentResponsibilitiesComponent, ObligationOperationsComponent, OperationsPagesComponent],
   selector: 'app-root', styleUrl: './app.scss', templateUrl: './app.html'
 })
 export class App {
@@ -47,12 +49,13 @@ export class App {
   private readonly operationsDialog = viewChild<ElementRef<HTMLDialogElement>>('operationsDialog');
   protected form = this.emptyForm();
   protected readonly today = new Intl.DateTimeFormat('en-GB', { dateStyle: 'full', timeZone: 'Asia/Dhaka' }).format(new Date());
-  protected readonly canSetup = computed(() => this.session.user()?.permissions.some(p=>['reports.manage','cycles.manage','components.manage','responsibilities.manage','reports.monitor'].includes(p)) ?? false);
-  protected readonly canAdmin = computed(() => this.session.user()?.permissions.some(p=>['administration.manage','users.manage','divisions.manage','roles.manage'].includes(p)) ?? false);
-  protected readonly navigation = computed(() => [
-    'Reporting Overview', 'Report Register', ...(this.canSetup() ? ['Report Configuration'] : []),
-    ...(this.session.user()?.permissions.includes('components.manage')?['Components and Responsibilities']:[]), ...(this.session.user()?.permissions.includes('component.teams.manage')?['Component Teams']:[]), 'Component Submission', 'Incoming Components', 'Submission Readiness', 'Main Report Submission', 'Deadline Extensions', 'Reminder Settings', 'Reporting Calendar'
-  ]);
+  protected readonly navigationGroups = computed(() => sidebarGroups(this.session.user()?.permissions ?? []));
+  protected readonly administrationScreen = computed(() => administrationDestinations[this.view()] ?? null);
+  protected readonly administrationView = computed(() => this.administrationScreen() !== null);
+  protected administrationSelected(screen: string) {
+    const title = Object.keys(administrationDestinations).find(title => administrationDestinations[title] === screen);
+    if (title) this.navigate(title);
+  }
   protected readonly divisions = computed(() => [...new Map((this.dashboard()?.upcoming ?? []).filter(row => row.divisionId && row.division).map(row => [row.divisionId, { id: row.divisionId, name: row.division }])).values()].sort((a, b) => a.name.localeCompare(b.name)));
   protected readonly reports = computed(() => this.unique((this.dashboard()?.upcoming ?? []).map(row => row.report)));
   protected readonly owners = computed(() => this.unique((this.dashboard()?.upcoming ?? []).map(row => row.owner.split('·')[0].trim())));
@@ -79,14 +82,24 @@ export class App {
   }
   protected loadSession() {
     this.ready.set(false); this.error.set('');
-    this.session.load().subscribe({ next: () => { this.ready.set(true); if (this.session.user()) this.reload(); }, error: error => { this.ready.set(true); this.error.set(apiError(error)); } });
+    this.session.load().subscribe({ next: () => { const user = this.session.user();
+      if (user) {
+        const saved = readSidebarState(user.id);
+        const allowed = this.navigationGroups().some(group => group.items.some(item => item.title === saved?.activeView));
+        this.view.set(allowed && saved ? saved.activeView : 'Reporting Overview');
+        this.reload();
+      }
+      this.ready.set(true); }, error: error => { this.ready.set(true); this.error.set(apiError(error)); } });
   }
-  protected signedIn() { this.view.set('Reporting Overview'); this.reload(); }
+  protected signedIn() {
+    try { localStorage.removeItem(sidebarStorageKey(this.session.user()?.id ?? '')); } catch { /* Storage is optional. */ }
+    this.view.set('Reporting Overview'); this.reload();
+  }
   protected reload() {
     this.loading.set(true); this.error.set('');
     this.api.getDashboard().subscribe({ next: data => { this.dashboard.set(data); this.loading.set(false); }, error: error => { this.loading.set(false); this.error.set(apiError(error)); if (error instanceof HttpErrorResponse && error.status === 401) this.session.user.set(null); } });
   }
-  protected navigate(view: string) { this.view.set(view); this.clearFilters(); if (window.innerWidth <= 760) this.navCollapsed.set(true); }
+  protected navigate(view: string) { if (!this.navigationGroups().some(group => group.items.some(item => item.title === view))) return; this.view.set(view); this.clearFilters(); if (window.innerWidth <= 760) this.navCollapsed.set(true); }
   protected setFilter(filter: string) { this.activeFilter.set(filter); }
   protected clearFilters() { this.search.set(''); this.activeFilter.set('All'); this.divisionFilter.set('All divisions'); this.reportFilter.set('All reports'); this.ownerFilter.set('All owners'); this.deadlineFilter.set('All dates'); }
   protected openRecord(row: Obligation) { if (!row.canRecordSending || (row.type === 'BB' && !row.isReadyForSubmission)) return; this.form = { ...this.emptyForm(), recipient: row.recipient }; this.recordError.set(''); this.selected.set(row); }
@@ -108,11 +121,6 @@ export class App {
   protected closeOperations() { this.operationsRow.set(null); }
   protected logout() { this.session.logout().subscribe({ next: () => { this.dashboard.set(null); this.selected.set(null); this.historyRow.set(null); }, error: error => this.error.set(apiError(error)) }); }
   protected statusClass(value: string) { return value.toLowerCase().replaceAll(' ', '-'); }
-  protected navIcon(item: string) { return ({
-    'Reporting Overview':'⌂', 'Report Register':'▤', 'Report Configuration':'⚙', 'Components and Responsibilities':'◫',
-    'Component Teams':'♧', 'Component Submission':'✓', 'Incoming Components':'↓', 'Submission Readiness':'◷', 'Main Report Submission':'↗', 'Deadline Extensions':'◴',
-    'Reminder Settings':'♢', 'Reporting Calendar':'□'
-  } as Record<string,string>)[item] ?? '•'; }
   protected readinessPercent(row: Obligation) { return row.requiredComponentCount ? Math.round(row.completedComponentCount / row.requiredComponentCount * 100) : 0; }
   private notify(message: string) { this.toast.set(message); window.setTimeout(() => this.toast.set(''), 4000); }
   private unique(values: string[]) { return [...new Set(values)].sort((a, b) => a.localeCompare(b)); }

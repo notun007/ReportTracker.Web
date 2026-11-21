@@ -39,4 +39,7 @@ input[aria-invalid=true] { border-color:#b33a3a; }
   .grid-search { flex-basis:100%; }
 }
 
-.initial-access{grid-column:1/-1;padding:16px;border:1px solid #d8e4f4;border-radius:12px;background:#f6f9fe}.initial-role{display:flex;gap:14px;align-items:end;margin:12px 0;flex-wrap:wrap}.initial-role label{flex:1;min-width:180px}.initial-role select{display:block;width:100%;margin-top:8px;padding:12px;border:1px solid #cbdaf0;border-radius:8px}
+
+.access-directory { margin:0; min-width:0; }
+.role-menu button { flex:0 1 auto; }
+.role-menu button[aria-current=page] { color:#075fab; background:linear-gradient(#e3f1ff,#c2def5); box-shadow:inset 0 1px 0 #fff,0 2px 5px #173b611a; }

@@ -4,3 +4,15 @@
 .pending-components ul { margin: 8px 0 0; padding-left: 18px; }
 .pending-components li { margin-bottom: 8px; }
 .pending-components li span { display: block; white-space: normal; }
+
+
+.shell { grid-template-columns:272px minmax(0,1fr); }
+.sidebar { width:272px; }
+.shell.nav-collapsed { grid-template-columns:68px minmax(0,1fr); }
+.shell.nav-collapsed .sidebar { width:68px; }
+.sidebar-backdrop { display:none; }
+@media(max-width:760px) {
+  .shell,.shell.nav-collapsed { grid-template-columns:minmax(0,1fr); }
+  .shell:not(.nav-collapsed) .sidebar { width:272px; }
+  .sidebar-backdrop { display:block; position:fixed; inset:0 0 0 272px; z-index:9; border:0; background:#061c3766; backdrop-filter:blur(2px); cursor:pointer; }
+}
