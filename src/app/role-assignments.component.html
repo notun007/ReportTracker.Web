@@ -1,0 +1,33 @@
+  <section class="directory" aria-labelledby="role-assignments-title">
+    <header class="directory-header"><div class="title"><span class="title-icon"><app-menu-icon name="key" /></span><div><h2 id="role-assignments-title">Role Assignments</h2><p>Choose a user to manage their roles.</p></div></div><button type="button" class="refresh" (click)="refresh.emit()" [disabled]="loading()"><app-menu-icon name="refresh" />Reload users</button></header>
+    <div class="directory-toolbar"><label class="user-search"><app-menu-icon name="search" /><span class="sr-only">Search users</span><input #userSearch type="search" placeholder="Search name, employee ID or role…" [ngModel]="search()" (ngModelChange)="search.set($event)"></label><label><span class="sr-only">Filter division</span><select aria-label="Filter division" [ngModel]="divisionId()" (ngModelChange)="divisionId.set($event)"><option value="">All divisions</option>@for(division of divisions();track division.id){<option [value]="division.id">{{division.name}}</option>}</select></label><label><span class="sr-only">Filter role assignments</span><select aria-label="Filter role assignments" [ngModel]="assignmentFilter()" (ngModelChange)="assignmentFilter.set($event)"><option value="all">All users</option><option value="assigned">With roles</option><option value="unassigned">Without roles</option></select></label></div>
+    <div class="result-heading"><span>{{matching().length}} {{matching().length===1?'user':'users'}}</span>@if(search()||divisionId()||assignmentFilter()!=='all'){<button type="button" class="clear" (click)="clearFilters()">Clear filters</button>}</div>
+    @if(error()){<div class="error-banner" role="alert">{{error()}}<button type="button" (click)="refresh.emit()" [disabled]="loading()">Retry</button></div>}
+    @if(loading()){<p class="loading-state" role="status">Loading users…</p>}
+    <div class="assignment-table-wrap" tabindex="0" role="region" aria-label="Role assignments directory">
+      <table class="assignment-table">
+        <caption class="sr-only">Users and their assigned roles</caption>
+        <thead><tr><th scope="col">Employee ID</th><th scope="col">User</th><th scope="col">Division</th><th scope="col">Assigned roles</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+        <tbody>
+          @for(user of matching();track user.id){
+            <tr [class.editing-user]="selectedId()===user.id">
+              <td class="employee-id">{{user.employeeId}}</td>
+              <td><div class="user-heading"><span class="avatar" aria-hidden="true">{{initials(user.displayName)}}</span><span class="account-name"><strong>{{user.displayName}}</strong><small>{{user.email}}</small></span></div></td>
+              <td><div class="division"><app-menu-icon name="building" /><span>{{division(user.divisionId)}}</span></div></td>
+              <td><div class="role-tags">@for(role of user.roles;track role){<span>{{role}}</span>}@empty{<span class="unassigned">No roles assigned</span>}</div></td>
+              <td><span class="state" [class.inactive]="!user.isActive"><i></i>{{user.isActive?'Active':'Inactive'}}</span></td>
+              <td><button type="button" class="manage-button" (click)="openUser(user.id,$event)" [disabled]="loading()" [attr.aria-label]="'Assign roles to '+user.displayName">Manage assignments<app-menu-icon name="arrow-right" /></button></td>
+            </tr>
+          } @empty {
+            <tr><td colspan="6" class="empty"><app-menu-icon name="users" /><strong>{{loading()?'Loading users…':error()?'Users could not be loaded.':'No users found'}}</strong>@if(!loading()&&!error()){<p>{{users().length?'Try a different name, division or assignment filter.':'Create an account in Users to assign roles.'}}</p>@if(users().length){<button type="button" (click)="clearFilters()">Clear filters</button>}}</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+<dialog #roleDrawer class="role-drawer" [attr.aria-label]="'Roles for '+(selectedUser()?.displayName||'selected user')" (cancel)="cancelDrawer($event)" (close)="drawerClosed()" (pointerdown)="backdropDown($event)" (click)="backdropClick($event)">
+  @if(selectedUser();as user){
+    <app-user-role-editor [user]="user" [drawer]="true" (closed)="selectedId.set('')" (saved)="saved.emit()" />
+  }
+</dialog>

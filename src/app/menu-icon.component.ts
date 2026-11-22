@@ -1,5 +1,12 @@
 import { Component, input } from '@angular/core';
 const paths: Readonly<Record<string,string>> = {
+  'search':'M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M15 15l6 6',
+  'refresh':'M20 7a9 9 0 0 0-15-2L2 8 M2 3v5h5 M4 17a9 9 0 0 0 15 2l3-3 M22 21v-5h-5',
+  'plus':'M12 5v14 M5 12h14',
+  'trash':'M3 6h18 M9 6V3h6v3 M5 6l1 15h12l1-15 M10 10v7 M14 10v7',
+  'check':'M5 12l4 4L19 6',
+  'arrow-right':'M4 12h16 M14 6l6 6-6 6',
+  'globe':'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z M2 12h20 M12 2a18 18 0 0 1 0 20 18 18 0 0 1 0-20',
   'overview':'M3 3v18h18 M7 14l4-5 4 3 5-7 M17 5h3v3',
   'dashboard':'M3 3h7v7H3z M14 3h7v4h-7z M14 11h7v10h-7z M3 14h7v7H3z',
   'register':'M5 3h14a1 1 0 0 1 1 1v17H6a3 3 0 0 1-3-3V5a2 2 0 0 1 2-2z M6 17h14 M7 7h9 M7 11h7',

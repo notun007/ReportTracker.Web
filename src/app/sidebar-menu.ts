@@ -2,7 +2,7 @@ export interface SidebarItem { title: string; icon: string; permissions?: readon
 export interface SidebarGroup { id: string; title: string; icon: string; tone: string; items: SidebarItem[] }
 export interface SidebarState { expandedGroup: string | null; activeView: string }
 export const administrationDestinations: Readonly<Record<string, 'users'|'access'|'roles'|'divisions'|'recipients'|'departments'|'frequencies'|'schedules'>> = {
-  'Users':'users', 'User Access':'access', 'Roles':'roles', 'Divisions':'divisions',
+  'Users':'users', 'Role Assignments':'access', 'Roles':'roles', 'Divisions':'divisions',
   'Submission Recipients':'recipients', 'Recipient Departments':'departments',
   'Reporting Frequencies':'frequencies', 'Reporting Cycle Rules':'schedules'
 };
@@ -29,7 +29,7 @@ const groups: SidebarGroup[] = [
   ]},
   {id:'access-management',title:'Access Management',icon:'access',tone:'violet',items:[
     {title:'Users',icon:'users',permissions:['users.manage']},
-    {title:'User Access',icon:'key',permissions:['roles.manage']},
+    {title:'Role Assignments',icon:'key',permissions:['roles.manage']},
     {title:'Roles',icon:'shield',permissions:['roles.manage','users.manage']}
   ]},
   {id:'system-configuration',title:'System Configuration',icon:'settings',tone:'slate',items:[
@@ -50,6 +50,6 @@ export function readSidebarState(userId: string): SidebarState | null {
     if (!saved || typeof saved !== 'object') return null;
     const state = saved as Partial<SidebarState>;
     if ((state.expandedGroup !== null && typeof state.expandedGroup !== 'string') || typeof state.activeView !== 'string') return null;
-    return {expandedGroup:state.expandedGroup,activeView:state.activeView};
+    return {expandedGroup:state.expandedGroup,activeView:state.activeView === 'User Access' ? 'Role Assignments' : state.activeView};
   } catch { return null; }
 }

@@ -1,3 +1,4 @@
+import { RoleAssignmentsComponent } from './role-assignments.component';
 import { AccessManagementComponent } from './access-management.component';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, OnChanges, OnInit, WritableSignal, computed, inject, input, output, signal } from '@angular/core';
@@ -22,7 +23,7 @@ const emptyUser = () => ({
 
 @Component({
   selector: 'app-administration',
-  imports: [AccessManagementComponent, FormsModule, SchedulePresetsComponent, ReportingFrequenciesComponent],
+  imports: [RoleAssignmentsComponent, AccessManagementComponent, FormsModule, SchedulePresetsComponent, ReportingFrequenciesComponent],
   templateUrl: './administration.component.html',
   styleUrl: './administration.component.scss'
 })
@@ -31,7 +32,6 @@ export class AdministrationComponent implements OnInit, OnChanges {
   readonly screenChanged = output<Screen>();
   private readonly api = inject(DashboardService);
   protected readonly session = inject(SessionService);
-  protected readonly accessUser = signal('');
   protected readonly roleView = signal<'roles'|'permissions'>('roles');
   protected readonly editingUser = signal<UserItem|null>(null);
   protected editUser(row:UserItem){this.editingUser.set(row);this.user={...emptyUser(),...row,mobileNumber:row.mobileNumber??'',password:''};}
@@ -42,7 +42,7 @@ export class AdministrationComponent implements OnInit, OnChanges {
 
   private readonly allScreens = [
     { id: 'users', title: 'Users', list: 'Users', columns: ['Employee ID', 'Name', 'Contact', 'Division', 'Status', 'Actions'] },
-    { id: 'access', title: 'User Access', list: 'User access', columns: [] },
+    { id: 'access', title: 'Role Assignments', list: 'Role assignments', columns: [] },
     { id: 'roles', title: 'Roles', list: 'Roles', columns: [] },
     { id: 'divisions', title: 'Add division', list: 'Divisions', columns: ['Code', 'Division name', 'Status'] },
     { id: 'recipients', title: 'Submission recipients', list: 'Saved recipients', columns: ['Organization name', 'Departments'] },
@@ -129,7 +129,7 @@ export class AdministrationComponent implements OnInit, OnChanges {
 
   protected navigate(screen: Screen) {
     if (screen === this.active() || this.busy()) return;
-    this.active.set(screen); this.accessUser.set(''); this.cancelEdit(); this.roleView.set('roles');
+    this.active.set(screen); this.cancelEdit(); this.roleView.set('roles');
     this.screenChanged.emit(screen);
     this.query.set('');
     this.duplicate.set(null);

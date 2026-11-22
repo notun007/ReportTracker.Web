@@ -8,24 +8,7 @@
 }
 
 @if (active() === 'access') {
-  @if (accessUser()) {
-    <app-access-management mode="user" [userId]="accessUser()" (closed)="accessUser.set('')" (saved)="loadUsers()" />
-  } @else {
-    <section class="tracker-panel access-directory" aria-labelledby="user-access-title">
-      <div class="panel-heading">
-        <div><h2 id="user-access-title">User Access</h2><span>Assign existing roles and scopes to users.</span></div>
-        <div class="row-actions"><label class="grid-search"><span class="sr-only">Search user access</span><input type="search" placeholder="Search users" [ngModel]="query()" (ngModelChange)="query.set($event)"></label><button type="button" class="secondary" (click)="loadUsers()">Refresh users</button></div>
-      </div>
-      @if (users().error || divisions().error) { <div class="error-banner" role="alert">{{ users().error || divisions().error }} <button type="button" (click)="retryAccessDirectory()">Retry</button></div> }
-      <div class="table-wrap" tabindex="0" role="region" aria-label="User access directory">
-        <table><thead><tr><th>Employee ID</th><th>User</th><th>Division</th><th>Assigned roles</th><th>Status</th><th>Actions</th></tr></thead><tbody>
-          @for (row of filteredUsers(); track row.id) {
-            <tr><td>{{row.employeeId}}</td><td><strong>{{row.displayName}}</strong><span>{{row.email}}</span></td><td>{{divisionName(row.divisionId)}}</td><td>{{row.roles.join(', ') || 'No roles'}}</td><td>{{row.isActive ? 'Active' : 'Inactive'}}</td><td><button type="button" class="link-button" (click)="accessUser.set(row.id)" [attr.aria-label]="'Manage access for '+row.displayName">Manage access</button></td></tr>
-          } @empty { <tr><td colspan="6" class="empty">{{users().loading ? 'Loading users…' : users().error ? 'Users could not be loaded.' : query().trim() ? 'No users match your search.' : 'No users available.'}}</td></tr> }
-        </tbody></table>
-      </div>
-    </section>
-  }
+  <app-role-assignments [users]="users().rows" [divisions]="divisions().rows" [loading]="users().loading || divisions().loading" [error]="users().error || divisions().error" (refresh)="retryAccessDirectory()" (saved)="loadUsers()" />
 } @else if (active() === 'roles') {
   <nav class="report-tabbar role-menu" aria-label="Role management views">
     <button type="button" [attr.aria-current]="roleView()==='roles' ? 'page' : null" (click)="roleView.set('roles')">Role configuration</button>
