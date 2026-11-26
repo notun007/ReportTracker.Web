@@ -49,7 +49,7 @@
   @if (data.existingReceiverCount > 2) {
     <div class="error-banner oa-feedback" role="alert">
       This report has more than two receiving officers. Review the existing Receiving officers list
-      before replacing it with a primary and alternate. No assignments have been changed.
+      to change or unassign that team.
     </div>
   }
   <form #assignmentForm="ngForm" (ngSubmit)="save(assignmentForm)" [attr.aria-busy]="busy()">
@@ -185,6 +185,11 @@
           } @else if (!info.assignees.length) {
             <p class="oa-card-note">No active officers are available in this division.</p>
           }
+          <div class="oa-card-actions">
+            <button class="secondary" type="button" [attr.aria-label]="'Unassign ' + section.responsibility"
+              [disabled]="!canUnassign(data, section.key)"
+              (click)="openUnassign(section, unassignDialog)">Unassign</button>
+          </div>
         </fieldset>
       }
     </div>
@@ -193,7 +198,9 @@
         <p aria-live="polite">
           <span class="oa-save-dot" [class.oa-dirty]="hasChanges()"></span
           >{{
-            busy()
+            unassigning()
+              ? 'Removing the selected responsibility assignments…'
+              : busy()
               ? 'Saving all three responsibilities…'
               : hasChanges()
                 ? 'You have unsaved changes'
@@ -210,10 +217,10 @@
           type="submit"
           [disabled]="busy() || loading() || assignmentForm.invalid || !valid()"
         >
-          @if (busy()) {
+          @if (busy() && !unassigning()) {
             <span class="oa-spinner" aria-hidden="true"></span>
           }
-          {{ busy() ? 'Saving…' : 'Save assignments' }}<span aria-hidden="true">→</span>
+          {{ busy() && !unassigning() ? 'Saving…' : 'Save assignments' }}<span aria-hidden="true">→</span>
         </button>
       </div>
     </footer>
@@ -221,3 +228,14 @@
 } @else if (!loading()) {
   <button class="secondary" type="button" (click)="load()">Retry assignments</button>
 }
+<dialog #unassignDialog class="modal oa-unassign-dialog" aria-labelledby="unassign-heading"
+  (close)="pendingUnassign.set(null)" (cancel)="$event.stopPropagation()">
+  <header class="modal-header"><h2 id="unassign-heading">Unassign {{ pendingUnassign()?.responsibility }}?</h2></header>
+  <div class="oa-unassign-body">
+    <p>Remove the saved primary and alternate assignees for {{ directory()?.report }}.</p>
+    <div class="oa-unassign-actions">
+      <button class="secondary" type="button" autofocus (click)="unassignDialog.close()">Cancel</button>
+      <button class="primary" type="button" (click)="unassign(unassignDialog)">Unassign</button>
+    </div>
+  </div>
+</dialog>

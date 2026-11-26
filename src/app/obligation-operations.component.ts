@@ -2,27 +2,77 @@ import { ReceivingOfficersComponent } from './receiving-officers.component';
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject, input, output, signal } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
-import { forkJoin, Observable } from 'rxjs';
+import { forkJoin, Observable, of } from 'rxjs';
 import { DashboardService, apiError } from './dashboard.service';
 import { EvidenceItem, Obligation, ObligationActions, ReceiptItem } from './dashboard.models';
 
 @Component({
   selector: 'app-obligation-operations', imports: [CommonModule, FormsModule, ReceivingOfficersComponent],
-  styles: [`.role-note { margin:0; padding:12px 22px; background:var(--surface); color:var(--muted); line-height:1.6; } .receipt-history article { padding:12px 0; border-top:1px solid var(--line); } .receipt-history span { display:block; margin-top:5px; color:var(--muted); } details { margin:12px 0; padding:12px; border:1px solid var(--line); border-radius:6px; } summary { cursor:pointer; font-weight:600; }`],
+  styles: [`
+    .role-note { margin:0; padding:12px 22px; background:var(--surface); color:var(--muted); line-height:1.6; }
+    .receipt-workspace { display:grid; gap:20px; }
+    .receipt-overview { padding:16px; border:1px solid var(--line); border-radius:8px; background:var(--surface); }
+    .receipt-heading { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 14px; }
+    .receipt-state { color:#174e85; background:#e9f3ff; border-radius:5px; padding:4px 8px; font-size:12px; font-weight:600; }
+    .receipt-state[data-state="Awaiting dispatch"],.receipt-state[data-state="Disputed"] { color:#704912; background:#fff7e6; }
+    .receipt-state[data-state="Confirmed"] { color:#176247; background:#e9f7ee; }
+    .receipt-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 20px; margin:0; }
+    .receipt-facts dt { color:var(--muted); font-size:12px; }
+    .receipt-facts dd { margin:4px 0 0; font-weight:600; overflow-wrap:anywhere; }
+    .receipt-next { margin:0; padding:10px 12px; border-inline-start:3px solid #c28a32; border-radius:4px; background:#fff7e6; }
+    .operations-content .receipt-next { color:#704912; }
+    .receipt-history { margin-top:18px; }
+    .receipt-workspace .receipt-history { margin-top:0; }
+    .receipt-history article { padding:12px 0; border-top:1px solid var(--line); overflow-wrap:anywhere; }
+    .receipt-history span { display:block; margin-top:5px; color:var(--muted); }
+    .receipt-history p { margin:0; }
+    details { margin:12px 0; padding:12px; border:1px solid var(--line); border-radius:6px; }
+    summary { cursor:pointer; font-weight:600; }
+    @media (max-width:520px) { .receipt-facts { grid-template-columns:minmax(0,1fr); } }
+  `],
   template: `
-    <div class="modal-header"><div><h2>Submission controls</h2><p>{{ row().report }} · {{ row().period }} · {{ row().obligation }}</p></div><button class="icon-button" type="button" (click)="closed.emit()" aria-label="Close">×</button></div>
+    <div class="modal-header"><div><h2 id="obligation-operations-title">{{ receiptOnly() ? 'Component receipt' : 'Submission controls' }}</h2><p>{{ row().report }} · {{ row().period }} · {{ row().obligation }}</p></div><button class="icon-button" type="button" (click)="closed.emit()" aria-label="Close">×</button></div>
     @if (error()) { <div class="error-banner" role="alert">{{ error() }} <button type="button" (click)="load()">Reload controls</button></div> }
     @if (message()) { <div class="success-banner" role="status">{{ message() }}</div> }
     @if (loading()) { <p class="role-note" role="status">Loading your responsibilities and task history…</p> }
     @if (!loading()) { @if (actions(); as permissions) {
-      <p class="role-note"><strong>Your actions:</strong> {{ availableActions() }}. History is visible for this task.</p>
-      <div class="operations-tabs" role="tablist">
+      @if (!receiptOnly()) {
+        <p class="role-note"><strong>Your actions:</strong> {{ availableActions() }}. History is visible for this task.</p>
+        <div class="operations-tabs" role="tablist">
         <button [class.active]="tab() === 'Evidence'" (click)="tab.set('Evidence')">Evidence</button>
         <button [class.active]="tab() === 'Receipt'" (click)="tab.set('Receipt')">{{ permissions.canConfirmReceipt ? 'Confirm receipt' : 'Receipt history' }}</button>
         @if (permissions.canAmendStatus) { <button [class.active]="tab() === 'Amendment'" (click)="tab.set('Amendment')">Amendment</button> }
-      </div>
-      <div class="operations-content">
-        @if (tab() === 'Evidence') {
+        </div>
+      }
+      <div class="operations-content" [class.receipt-workspace]="receiptOnly()">
+        @if (receiptOnly()) {
+          @let receiptStatus = receiptStateLabel(permissions);
+          <section class="receipt-overview" aria-labelledby="handover-title">
+            <div class="receipt-heading">
+              <h3 id="handover-title">Handover details</h3>
+              <span class="receipt-state" [attr.data-state]="receiptStatus">Receipt: {{ receiptStatus }}</span>
+            </div>
+            <dl class="receipt-facts">
+              <div><dt>Preparing division</dt><dd>{{ row().division }}</dd></div>
+              <div><dt>Preparing officer</dt><dd>{{ row().owner }}</dd></div>
+              <div><dt>Receiving division</dt><dd>{{ permissions.receivingDivisionName || row().recipient || 'Not configured' }}</dd></div>
+              <div><dt>Handover deadline (Asia/Dhaka)</dt><dd>{{ row().dueAtUtc | date:'dd MMM y, HH:mm':'+0600' }}</dd></div>
+            </dl>
+          </section>
+          @if (permissions.latestDispatch; as dispatch) {
+            <section aria-labelledby="dispatch-title">
+              <h3 id="dispatch-title">{{ dispatch.isPartial ? 'Latest partial dispatch' : 'Latest dispatch' }}</h3>
+              <dl class="receipt-facts">
+                <div><dt>Actual sent time (Asia/Dhaka)</dt><dd>{{ dispatch.actualSentAtUtc | date:'dd MMM y, HH:mm':'+0600' }}</dd></div>
+                <div><dt>Channel</dt><dd>{{ dispatch.channel }}</dd></div>
+                @if (dispatch.reference) {
+                  <div><dt>Dispatch reference</dt><dd>{{ dispatch.reference }}</dd></div>
+                }
+              </dl>
+            </section>
+          }
+        }
+        @if (!receiptOnly() && tab() === 'Evidence') {
           @if (permissions.canUploadEvidence) {
             <section><h3>Upload sending evidence</h3><p>Sender action: attach confirmation proof, such as an acknowledgment or dispatch slip. Do not upload regulatory report contents. A different authorized coordinator reviews the proof.</p>
               <label class="file-drop">Evidence file<input type="file" accept=".pdf,.png,.jpg,.jpeg" (change)="chooseFile($event)"><span>PDF, PNG or JPEG · maximum 10 MB</span></label>
@@ -39,27 +89,40 @@ import { EvidenceItem, Obligation, ObligationActions, ReceiptItem } from './dash
             </article>
           } @empty { <p>No evidence uploaded.</p> }</div>
         }
-        @if (tab() === 'Receipt') {
-          <section><h3>{{ permissions.isExternalReceipt ? 'Submission recipient acknowledgment' : 'Internal receipt confirmation' }}</h3>
+        @if (receiptOnly() || tab() === 'Receipt') {
+          <section><h3>{{ receiptOnly() ? 'Receipt action' : permissions.isExternalReceipt ? 'Submission recipient acknowledgment' : 'Internal receipt confirmation' }}</h3>
             @if (permissions.canConfirmReceipt) {
-              <p>{{ permissions.isExternalReceipt ? 'Coordinator action: record when the submission recipient acknowledged receipt. Use the actual acknowledgment received.' : 'Receiving officer action: confirm when your division received the input. The sending officer cannot confirm their own handover.' }}</p>
-              <form #receiptForm="ngForm" (ngSubmit)="saveReceipt(receiptForm)"><label>Received time (Asia/Dhaka)<input type="datetime-local" name="received" [(ngModel)]="receipt.receivedLocal" required></label><label class="checkbox"><input type="checkbox" name="disputed" [(ngModel)]="receipt.isDisputed">Receipt is disputed</label>
+              <p>{{ receiptOnly() ? 'Record when your division actually received the component. Confirming receipt acknowledges the delivery.' : permissions.isExternalReceipt ? 'Coordinator action: record when the submission recipient acknowledged receipt. Use the actual acknowledgment received.' : 'Receiving officer action: confirm when your division received the input. The sending officer cannot confirm their own handover.' }}</p>
+              <form #receiptForm="ngForm" (ngSubmit)="saveReceipt(receiptForm)"><label>{{ receiptOnly() ? 'Actual received time (Asia/Dhaka)' : 'Received time (Asia/Dhaka)' }}<input type="datetime-local" name="received" [(ngModel)]="receipt.receivedLocal" required></label><label class="checkbox"><input type="checkbox" name="disputed" [(ngModel)]="receipt.isDisputed">Receipt is disputed</label>
                 @if (receipt.isDisputed) { <label>Dispute reason<textarea name="reason" [(ngModel)]="receipt.reason" required maxlength="1000"></textarea></label> }
-                <button class="primary" type="submit" [disabled]="busy() || receiptForm.invalid">{{ permissions.isExternalReceipt ? 'Record recipient acknowledgment' : 'Confirm receipt' }}</button>
+                <button class="primary" type="submit" [disabled]="busy() || receiptForm.invalid">{{ receiptOnly() && receipt.isDisputed ? 'Record dispute' : permissions.isExternalReceipt ? 'Record recipient acknowledgment' : 'Confirm receipt' }}</button>
               </form>
+            } @else if (receiptOnly()) {
+              <p class="receipt-next">{{ permissions.hasSending ? 'Your account can review receipt history for this task. A designated receiving officer who did not prepare the component or record its dispatch can confirm receipt.' : 'The preparing officer must record dispatch before an eligible receiving officer can confirm receipt.' }}</p>
             } @else {
               <p>{{ !permissions.hasSending ? 'Receipt can be recorded after a submission has been recorded.' : permissions.isExternalReceipt ? 'A separate authorized coordinator records the recipient acknowledgment. Senders can view the history here.' : permissions.receivingDivisionName ? 'A designated receiving officer in ' + permissions.receivingDivisionName + ' confirms receipt. Division membership alone does not grant authority.' : 'A coordinator must assign the receiving division before an internal officer can confirm receipt.' }}</p>
             }
-            @if (permissions.canAssignReceiver) {
+            @if (!receiptOnly() && permissions.canAssignReceiver) {
               <details><summary>Receiving responsibility</summary><p>Choose the receiving division, then assign named receiving officers. The sender remains excluded.</p>
                 <form #receiverForm="ngForm" (ngSubmit)="assignReceiver(receiverForm)"><label>Receiving division<select name="receivingDivision" [(ngModel)]="receivingDivisionId" required><option value="">Choose receiving division</option>@for (division of permissions.receivingDivisions; track division.id) { <option [value]="division.id">{{ division.name }}</option> }</select></label><button class="primary" type="submit" [disabled]="busy() || receiverForm.invalid || receivingDivisionId === permissions.receivingDivisionId">Save receiving division</button></form>
               </details>
             }
           </section>
-          @if (permissions.canManageReceivingOfficers && permissions.receivingDivisionId) { <section><app-receiving-officers [reportId]="reportId()" [divisionId]="permissions.receivingDivisionId" (changed)="changed.emit(); load()" /></section> }
-          <section class="receipt-history"><h3>Receipt history</h3>@for (item of receipts(); track item.id) { <article><strong>{{ item.isDisputed ? 'Disputed' : 'Received' }} · {{ item.receivedAtUtc | date:'dd MMM y, HH:mm':'+0600' }}</strong><span>Recorded by {{ item.actor }} · {{ item.recordedAtUtc | date:'dd MMM y, HH:mm':'+0600' }}</span>@if (item.reason) { <p>{{ item.reason }}</p> }</article> } @empty { <p>No receipt confirmation recorded.</p> }</section>
+          @if (!receiptOnly() && permissions.canManageReceivingOfficers && permissions.receivingDivisionId) { <section><app-receiving-officers [reportId]="reportId()" [divisionId]="permissions.receivingDivisionId" (changed)="changed.emit(); load()" /></section> }
+          <section class="receipt-history"><h3>Receipt history</h3>
+            @for (item of receipts(); track item.id) {
+              <article>
+                <strong>{{ item.isDisputed ? 'Disputed' : 'Receipt confirmed' }} · {{ item.receivedAtUtc | date:'dd MMM y, HH:mm':'+0600' }}</strong>
+                <span>Recorded by {{ item.actor }} · {{ item.recordedAtUtc | date:'dd MMM y, HH:mm':'+0600' }} (Dhaka)</span>
+                @if (receiptOnly() && permissions.latestDispatch && item.sendingEventId !== permissions.latestDispatch.id) {
+                  <span>Earlier dispatch</span>
+                }
+                @if (item.reason) { <p>Dispute reason: {{ item.reason }}</p> }
+              </article>
+            } @empty { <p>No receipt confirmation or dispute has been recorded.</p> }
+          </section>
         }
-        @if (tab() === 'Amendment' && permissions.canAmendStatus) {
+        @if (!receiptOnly() && tab() === 'Amendment' && permissions.canAmendStatus) {
           <section><h3>Audited status amendment</h3><p>Correct a previously recorded status. The previous value remains in the audit history.</p><form #amendmentForm="ngForm" (ngSubmit)="amend(amendmentForm)"><label>Replacement status<select name="status" [(ngModel)]="amendment.replacementStatus"><option>Not Sent</option><option>Partially Sent</option><option>Sent</option></select></label><label>Reason<textarea name="reason" [(ngModel)]="amendment.reason" required maxlength="1000"></textarea></label><button class="primary" type="submit" [disabled]="busy() || amendmentForm.invalid">Record amendment</button></form></section>
         }
       </div>
@@ -67,18 +130,28 @@ import { EvidenceItem, Obligation, ObligationActions, ReceiptItem } from './dash
   `
 })
 export class ObligationOperationsComponent implements OnInit {
-  readonly row = input.required<Obligation>(); readonly reportId = input.required<string>(); readonly initialTab = input<'Evidence' | 'Receipt'>('Evidence'); readonly closed = output<void>(); readonly changed = output<void>();
+  readonly row = input.required<Obligation>(); readonly reportId = input.required<string>(); readonly receiptOnly = input(false); readonly closed = output<void>(); readonly changed = output<void>();
   private readonly api = inject(DashboardService);
   protected readonly tab = signal('Evidence'); protected readonly evidence = signal<EvidenceItem[]>([]);
   protected readonly receipts = signal<ReceiptItem[]>([]); protected readonly actions = signal<ObligationActions | null>(null);
   protected readonly loading = signal(true); protected readonly busy = signal(false); protected readonly error = signal(''); protected readonly message = signal('');
   protected file: File | null = null; protected receivingDivisionId = '';
   protected receipt = { receivedLocal: '', isDisputed: false, reason: '' }; protected amendment = { replacementStatus: 'Not Sent', reason: '' };
-  ngOnInit() { this.tab.set(this.initialTab()); this.load(); }
+  ngOnInit() { this.load(); }
+  protected receiptStateLabel(permissions: ObligationActions) {
+    if (!permissions.hasSending) return 'Awaiting dispatch';
+    switch (permissions.receiptState) {
+      case 'ReceiptConfirmed': return 'Confirmed';
+      case 'ReceiptDisputed': return 'Disputed';
+      case 'NotRequired': return 'Not required';
+      case 'AwaitingConfirmation': return 'Awaiting confirmation';
+      default: return this.row().receiptStatus;
+    }
+  }
   protected availableActions() { const a = this.actions(); return [a?.canUploadEvidence ? 'Upload sending proof' : '', a?.canReviewEvidence ? 'Review other officers’ evidence' : '', a?.canConfirmReceipt ? 'Confirm receipt' : ''].filter(Boolean).join(' · ') || 'View history'; }
   protected load() {
     this.loading.set(true); this.error.set('');
-    forkJoin({ actions: this.api.obligationActions(this.row().id), evidence: this.api.evidence(this.row().id), receipts: this.api.receipts(this.row().id) }).subscribe({
+    forkJoin({ actions: this.api.obligationActions(this.row().id), evidence: this.receiptOnly() ? of<EvidenceItem[]>([]) : this.api.evidence(this.row().id), receipts: this.api.receipts(this.row().id) }).subscribe({
       next: data => { this.actions.set(data.actions); this.evidence.set(data.evidence); this.receipts.set(data.receipts); this.receivingDivisionId = data.actions.receivingDivisionId ?? ''; this.loading.set(false); },
       error: error => { this.loading.set(false); this.actions.set(null); this.error.set(apiError(error)); }
     });

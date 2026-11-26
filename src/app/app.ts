@@ -12,11 +12,21 @@ import { WorkspaceSetupComponent } from './workspace-setup.component';
 import { AdministrationComponent } from './administration.component';
 import { ComponentResponsibilitiesComponent } from './component-responsibilities.component';
 import { ObligationOperationsComponent } from './obligation-operations.component';
+import { SubmissionReadinessDetailsComponent } from './submission-readiness-details.component';
 import { OperationsPagesComponent } from './operations-pages.component';
 import { NotificationService } from './notification.service';
 
+const dhakaDeadlineDate = new Intl.DateTimeFormat('sv-SE', { dateStyle: 'short', timeZone: 'Asia/Dhaka' });
+
+function incomingDeadlineBucket(dueAtUtc: string, today: string) {
+  const deadline = Date.parse(dueAtUtc);
+  if (!Number.isFinite(deadline)) return '';
+  const date = dhakaDeadlineDate.format(deadline);
+  return date === today ? 'today' : date < today ? 'past' : 'future';
+}
+
 @Component({
-  imports: [SidebarNavigationComponent, CommonModule, FormsModule, SignInComponent, WorkspaceSetupComponent, AdministrationComponent, ComponentTeamsComponent, ComponentResponsibilitiesComponent, ObligationOperationsComponent, OperationsPagesComponent],
+  imports: [SidebarNavigationComponent, CommonModule, FormsModule, SignInComponent, WorkspaceSetupComponent, AdministrationComponent, ComponentTeamsComponent, ComponentResponsibilitiesComponent, ObligationOperationsComponent, SubmissionReadinessDetailsComponent, OperationsPagesComponent],
   selector: 'app-root', styleUrl: './app.scss', templateUrl: './app.html'
 })
 export class App {
@@ -31,12 +41,14 @@ export class App {
   protected readonly activeFilter = signal('All');
   protected readonly divisionFilter = signal('All divisions');
   protected readonly reportFilter = signal('All reports');
+  protected readonly periodFilter = signal('');
   protected readonly ownerFilter = signal('All owners');
   protected readonly deadlineFilter = signal('All dates');
   protected readonly navCollapsed = signal(window.innerWidth <= 760);
   protected readonly selected = signal<Obligation | null>(null);
   protected readonly historyRow = signal<Obligation | null>(null);
   protected readonly operationsRow = signal<Obligation | null>(null);
+  protected readonly readinessRow = signal<Obligation | null>(null);
   protected readonly history = signal<SendingHistory[]>([]);
   protected readonly historyLoading = signal(false);
   protected readonly historyError = signal('');
@@ -47,6 +59,7 @@ export class App {
   private readonly recordDialog = viewChild<ElementRef<HTMLDialogElement>>('recordDialog');
   private readonly historyDialog = viewChild<ElementRef<HTMLDialogElement>>('historyDialog');
   private readonly operationsDialog = viewChild<ElementRef<HTMLDialogElement>>('operationsDialog');
+  private readonly readinessDialog = viewChild<ElementRef<HTMLDialogElement>>('readinessDialog');
   protected form = this.emptyForm();
   protected readonly today = new Intl.DateTimeFormat('en-GB', { dateStyle: 'full', timeZone: 'Asia/Dhaka' }).format(new Date());
   protected readonly navigationGroups = computed(() => sidebarGroups(this.session.user()?.permissions ?? []));
@@ -59,18 +72,40 @@ export class App {
   protected readonly divisions = computed(() => [...new Map((this.dashboard()?.upcoming ?? []).filter(row => row.divisionId && row.division).map(row => [row.divisionId, { id: row.divisionId, name: row.division }])).values()].sort((a, b) => a.name.localeCompare(b.name)));
   protected readonly reports = computed(() => this.unique((this.dashboard()?.upcoming ?? []).map(row => row.report)));
   protected readonly owners = computed(() => this.unique((this.dashboard()?.upcoming ?? []).map(row => row.owner.split('·')[0].trim())));
+  private readonly incomingRows = computed(() => (this.dashboard()?.upcoming ?? [])
+    .filter(row => row.type === 'Internal' && row.isAssignedReceiver));
+  protected readonly incomingReports = computed(() => {
+    const reports = new Map(this.incomingRows().map(row =>
+      [row.reportId, { id: row.reportId, label: row.reportCode ? row.reportCode + ' — ' + row.report : row.report }]));
+    return [...reports.values()].sort((a, b) => a.label.localeCompare(b.label));
+  });
+  protected readonly incomingPeriods = computed(() => {
+    const reportId = this.reportFilter();
+    const periods = new Map<string, { id: string; label: string; start: string }>();
+    for (const row of this.incomingRows()) {
+      if (row.reportId === reportId && !periods.has(row.cycleId)) {
+        periods.set(row.cycleId, { id: row.cycleId, label: row.period, start: row.periodStart || row.dueAtUtc.slice(0, 10) });
+      }
+    }
+    return [...periods.values()].sort((a, b) => b.start.localeCompare(a.start) || a.label.localeCompare(b.label));
+  });
   protected readonly filtered = computed(() => {
     const filter = this.activeFilter(); const term = this.search().trim().toLowerCase(); const view = this.view();
-    return (this.dashboard()?.upcoming ?? []).filter(row =>
+    const incoming = view === 'Incoming Components';
+    const report = this.reportFilter();
+    const period = this.periodFilter();
+    const deadline = this.deadlineFilter();
+    const today = incoming && deadline !== 'All dates' ? dhakaDeadlineDate.format(new Date()) : '';
+    return (incoming ? this.incomingRows() : this.dashboard()?.upcoming ?? []).filter(row =>
       (view !== 'Component Submission' || (row.type === 'Internal' && (row.isAssignedToMe || row.canRecordSending))) &&
-      (view !== 'Incoming Components' || (row.type === 'Internal' && row.isAssignedReceiver)) &&
       (!['Submission Readiness', 'Main Report Submission'].includes(view) || row.type === 'BB') &&
       (filter === 'All' || (filter === 'My Pending' && row.isAssignedToMe && row.sendingStatus !== 'Sent') || row.timeliness === filter || row.type === filter || row.sendingStatus === filter ||
         (filter === 'Evidence Pending' && ['Missing', 'Provided', 'Rejected'].includes(row.evidenceStatus))) &&
       (this.divisionFilter() === 'All divisions' || row.divisionId === this.divisionFilter()) &&
-      (this.reportFilter() === 'All reports' || row.report === this.reportFilter()) &&
+      (report === 'All reports' || (incoming ? row.reportId : row.report) === report) &&
+      (!incoming || !period || row.cycleId === period) &&
       (this.ownerFilter() === 'All owners' || row.owner.startsWith(this.ownerFilter())) &&
-      (this.deadlineFilter() === 'All dates' || row.timeliness === this.deadlineFilter()) &&
+      (deadline === 'All dates' || (incoming ? incomingDeadlineBucket(row.dueAtUtc, today) : row.timeliness) === deadline) &&
       (!term || `${row.report} ${row.obligation} ${row.owner} ${row.period}`.toLowerCase().includes(term)));
   });
   protected readonly maxPerformance = computed(() => Math.max(1, ...(this.dashboard()?.performance.map(x => x.count) ?? [])));
@@ -78,6 +113,7 @@ export class App {
     effect(() => { const element = this.recordDialog()?.nativeElement; if (this.selected() && element && !element.open) element.showModal(); });
     effect(() => { const element = this.historyDialog()?.nativeElement; if (this.historyRow() && element && !element.open) element.showModal(); });
     effect(() => { const element = this.operationsDialog()?.nativeElement; if (this.operationsRow() && element && !element.open) element.showModal(); });
+    effect(() => { const element = this.readinessDialog()?.nativeElement; if (this.readinessRow() && element && !element.open) element.showModal(); });
     this.loadSession();
   }
   protected loadSession() {
@@ -101,8 +137,12 @@ export class App {
   }
   protected navigate(view: string) { if (!this.navigationGroups().some(group => group.items.some(item => item.title === view))) return; this.view.set(view); this.clearFilters(); if (window.innerWidth <= 760) this.navCollapsed.set(true); }
   protected setFilter(filter: string) { this.activeFilter.set(filter); }
-  protected clearFilters() { this.search.set(''); this.activeFilter.set('All'); this.divisionFilter.set('All divisions'); this.reportFilter.set('All reports'); this.ownerFilter.set('All owners'); this.deadlineFilter.set('All dates'); }
-  protected openRecord(row: Obligation) { if (!row.canRecordSending || (row.type === 'BB' && !row.isReadyForSubmission)) return; this.form = { ...this.emptyForm(), recipient: row.recipient }; this.recordError.set(''); this.selected.set(row); }
+  protected setReportFilter(report: string) {
+    this.reportFilter.set(report);
+    this.periodFilter.set('');
+  }
+  protected clearFilters() { this.search.set(''); this.activeFilter.set('All'); this.divisionFilter.set('All divisions'); this.setReportFilter('All reports'); this.ownerFilter.set('All owners'); this.deadlineFilter.set('All dates'); }
+  protected openRecord(row: Obligation) { if (this.view() === 'Incoming Components' || this.view() === 'Submission Readiness' || !row.canRecordSending || (row.type === 'BB' && !row.isReadyForSubmission)) return; this.form = { ...this.emptyForm(), recipient: row.recipient }; this.recordError.set(''); this.selected.set(row); }
   protected closeRecord(event?: Event) { if (this.saving()) { event?.preventDefault(); return; } this.selected.set(null); }
   protected saveRecord(form: NgForm) {
     const row = this.selected(); if (!row || form.invalid || this.saving()) return;
@@ -117,7 +157,10 @@ export class App {
     this.history.set([]); this.historyError.set(''); this.historyLoading.set(true); this.historyRow.set(row);
     this.api.history(row.id).subscribe({ next: data => { if (this.historyRow()?.id === row.id) { this.history.set(data); this.historyLoading.set(false); } }, error: error => { this.historyLoading.set(false); this.historyError.set(apiError(error)); } });
   }
-  protected openOperations(row: Obligation) { this.operationsRow.set(row); }
+  protected openOperations(row: Obligation) {
+    if (this.view() === 'Submission Readiness') return;
+    this.operationsRow.set(row);
+  }
   protected closeOperations() { this.operationsRow.set(null); }
   protected logout() { this.session.logout().subscribe({ next: () => { this.dashboard.set(null); this.selected.set(null); this.historyRow.set(null); }, error: error => this.error.set(apiError(error)) }); }
   protected statusClass(value: string) { return value.toLowerCase().replaceAll(' ', '-'); }

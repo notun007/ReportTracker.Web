@@ -1,6 +1,7 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { catchError, switchMap, tap, throwError, timeout, TimeoutError } from 'rxjs';
+import type { ReportConfigurationUpdate } from './dashboard.models';
 import { ComponentTeamDirectory, ReportResponsibilityAssignments, SaveReportResponsibilityAssignments, WeeklyPresetPeriod, ReportingFrequencyItem, SchedulePresetDirectory, SchedulePresetItem, SchedulePresetPeriod, DivisionItem, ComponentContributor, Lookup, SubmissionDestination, SubmissionRecipient, ReceivingOfficerDirectory, ObligationActions, ReceiptItem, ReportingCycle, DashboardSummary, SendingRecord, SendingHistory, SessionResponse, SessionUser, Lookups, ReportDefinition, UserItem, ComponentDefinition, SubmissionReadiness, EvidenceItem, ExtensionItem, ReminderPolicy, NotificationItem, CalendarItem, ManagementAnalytics, YearlyCyclePreview, YearlyCycleGenerationResult } from './dashboard.models';
 
 export const databaseUnavailableMessage = 'ReportTracker cannot connect to its database right now. Please retry. If the problem continues, contact your system administrator.';
@@ -55,8 +56,18 @@ export class DashboardService {
   createSubmissionRecipient(name: string) { return this.http.post<Lookup>('/api/setup/submission-recipients', {name}); }
   createSubmissionDepartment(recipientId: string, name: string) { return this.http.post<Lookup>(`/api/setup/submission-recipients/${recipientId}/departments`, {name}); }
   createReport(body: unknown) { return this.http.post<{id:string}>('/api/setup/reports', body); }
+  updateReportConfiguration(id: string, body: ReportConfigurationUpdate) {
+    return this.http.put<void>(`/api/setup/reports/${id}/configuration`, {
+      ...body,
+      dueTime: body.dueTime.length === 5 ? body.dueTime + ':00' : body.dueTime,
+      submissionRecipientId: body.submissionRecipientId || null
+    });
+  }
   reportResponsibilityAssignments(reportId:string) { return this.http.get<ReportResponsibilityAssignments>(`/api/report-definitions/${reportId}/responsibility-assignments`); }
   saveReportResponsibilityAssignments(reportId:string,body:SaveReportResponsibilityAssignments) { return this.http.put<void>(`/api/report-definitions/${reportId}/responsibility-assignments`,body); }
+  unassignReportResponsibility(reportId: string, role: 'controller' | 'receiver' | 'finalSubmission', rowVersion: string) {
+    return this.http.delete<void>(`/api/report-definitions/${reportId}/responsibility-assignments/${role}`, { body: { rowVersion } });
+  }
   setReportResponsibilities(id:string,body:unknown) { return this.http.put<void>(`/api/setup/reports/${id}/responsibilities`,body); }
   cycles(id: string) { return this.http.get<ReportingCycle[]>(`/api/setup/reports/${id}/cycles`); }
   createCycle(id: string, body: unknown) { return this.http.post(`/api/setup/reports/${id}/cycles`, body); }

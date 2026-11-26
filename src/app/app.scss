@@ -4,6 +4,7 @@
 .pending-components ul { margin: 8px 0 0; padding-left: 18px; }
 .pending-components li { margin-bottom: 8px; }
 .pending-components li span { display: block; white-space: normal; }
+.readiness-modal { width:min(960px,calc(100% - 28px)); }
 
 
 .shell { grid-template-columns:272px minmax(0,1fr); }

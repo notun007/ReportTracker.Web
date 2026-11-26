@@ -485,3 +485,26 @@
     animation: none;
   }
 }
+.oa-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: auto;
+}
+
+.oa-unassign-dialog {
+  width: min(30rem, calc(100% - 2rem));
+}
+
+.oa-unassign-body {
+  padding: 16px 20px;
+}
+
+.oa-unassign-body p {
+  margin: 0 0 16px;
+}
+
+.oa-unassign-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

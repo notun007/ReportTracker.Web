@@ -1,9 +1,10 @@
 import { ReportResponsibilityAssignmentsComponent } from './report-responsibilities.component';
-import { Component, OnInit, OnDestroy, computed, inject, output, signal, viewChild } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, ElementRef, Injector, OnInit, OnDestroy, afterNextRender, computed, inject, output, signal, viewChild, viewChildren } from '@angular/core';
 import { FormsModule, NgForm } from '@angular/forms';
 import { forkJoin, Observable, Subscription } from 'rxjs';
 import { DashboardService, SessionService, apiError } from './dashboard.service';
-import { Lookups, ReportDefinition, ReportingCycle, SubmissionDestination, SubmissionRecipient } from './dashboard.models';
+import { Lookups, ReportDefinition, ReportingCycle, SubmissionDestination, SubmissionRecipient, ReportConfigurationUpdate } from './dashboard.models';
 
 import { SubmissionDestinationPickerComponent } from './submission-destination-picker.component';
 import { ReportComponentEditorComponent } from './report-component-editor.component';
@@ -13,6 +14,7 @@ import { YearlyCycleGeneratorComponent } from './yearly-cycle-generator.componen
 type SetupTab = 'reports' | 'create' | 'profile' | 'components' | 'cycles' | 'assignments';
 type CycleView = 'list' | 'generate';
 type CycleEditorMode = 'list' | 'detail' | 'manual';
+type ReportEditField = Exclude<keyof ReportConfigurationUpdate, 'rowVersion'>;
 
 const reportFrequencyByCode = new Map([
   ['weekly', 'Weekly'],
@@ -64,6 +66,18 @@ const reportFrequencyByCode = new Map([
     .report-optional { padding:10px 12px; border:1px solid var(--line); border-radius:8px; }
     .report-optional summary { cursor:pointer; font-size:13px; font-weight:600; }
     .report-optional .form-grid { margin-top:12px; }
+    .report-inline-fields .report-field [aria-invalid="true"] { border-color:#a22929; }
+    .report-inline-fields .report-field .report-edit-notice {
+      justify-self:start;
+      margin-top:0;
+      padding:4px 8px;
+      border-inline-start:2px solid #c28a32;
+      border-radius:4px;
+      background:#fff7e6;
+      color:#704912;
+      font-weight:600;
+      line-height:1.4;
+    }
     @media(max-width:640px) { .setup-editor { padding:14px 12px 0; } .setup-editor>form { grid-template-columns:minmax(0,1fr); }.cycle-list-head { align-items:stretch; flex-direction:column; }.cycle-list-actions>* { flex:1; } }
   `],
 
@@ -96,7 +110,81 @@ const reportFrequencyByCode = new Map([
             </div>
           }
         </div>
-        <section class="setup-tab-panel" role="tabpanel" id="setup-panel-reports" aria-labelledby="setup-tab-reports" [hidden]="activeTab()!=='reports'">
+        <section class="setup-tab-panel" [class.department-panel]="!!editDraft" role="tabpanel" id="setup-panel-reports"
+          aria-labelledby="setup-tab-reports" [hidden]="activeTab()!=='reports'">
+        @if (editDraft; as draft) {
+          <article class="setup-card setup-editor report-inline-layout" aria-labelledby="edit-report-heading">
+            <h3 #editHeading id="edit-report-heading" tabindex="-1">Edit report · {{ draft.report.code }}</h3>
+            <form class="report-inline-fields" #editForm="ngForm" (ngSubmit)="updateReport(editForm)">
+              <label class="report-field"><span>Code</span><input name="code" [value]="draft.report.code" disabled></label>
+              <label class="report-field"><span>Report name</span><input name="name" [(ngModel)]="draft.values.name" [disabled]="busy()" required maxlength="150"></label>
+              <label class="report-field"><span>Report type</span>
+                <select name="reportTypeId" [(ngModel)]="draft.values.reportTypeId" [disabled]="busy()" required>
+                  @for (type of lookups().reportTypes; track type.id) { <option [ngValue]="type.id">{{ type.name }}</option> }
+                </select>
+              </label>
+              @for (field of editDivisionFields; track field.key) {
+                @let fieldError = editFieldErrors()[field.key];
+                @let locked = draft.report.divisionLocks?.[field.lock];
+                <label class="report-field"><span>{{ field.label }}</span>
+                  <select [name]="field.key" [(ngModel)]="draft.values[field.key]" [disabled]="busy() || !!locked"
+                    (ngModelChange)="clearEditFieldError(field.key)"
+                    [attr.aria-invalid]="fieldError ? 'true' : null"
+                    [attr.aria-describedby]="fieldError ? 'edit-error-' + field.key : locked ? 'edit-lock-' + field.key : null">
+                    @if (!draft.report[field.key]) { <option [ngValue]="null">Not configured</option> }
+                    @else if (!hasDivision(draft.report[field.key]!)) {
+                      <option [ngValue]="draft.report[field.key]">Current division (inactive)</option>
+                    }
+                    @for (division of lookups().divisions; track division.id) {
+                      <option [ngValue]="division.id">{{ division.name }}</option>
+                    }
+                  </select>
+                  @if (fieldError) {
+                    <small [id]="'edit-error-' + field.key" class="report-edit-notice" role="alert">{{ fieldError }}</small>
+                  } @else if (locked) {
+                    <small [id]="'edit-lock-' + field.key" class="report-edit-notice">{{ field.label }} is locked because {{ field.responsibility }} is assigned in the current division.</small>
+                  }
+                </label>
+              }
+              <label class="report-field"><span>Frequency</span>
+                <select name="frequency" [(ngModel)]="draft.values.frequency" (ngModelChange)="clearEditFieldError('frequency')"
+                  required [disabled]="draft.report.cycleCount > 0 || busy()"
+                  [attr.aria-invalid]="editFieldErrors().frequency ? 'true' : null"
+                  [attr.aria-describedby]="editFieldErrors().frequency ? 'edit-frequency-error' : draft.report.cycleCount > 0 ? 'edit-frequency-lock' : null">
+                  @if (!hasFrequency(draft.report.frequency)) {
+                    <option [value]="draft.report.frequency">{{ draft.report.frequency }}</option>
+                  }
+                  @for (frequency of frequencies(); track frequency.value) {
+                    <option [value]="frequency.value">{{ frequency.name }}</option>
+                  }
+                </select>
+                @if (draft.report.cycleCount > 0) {
+                  <small id="edit-frequency-lock" class="report-edit-notice">Frequency is locked because a reporting cycle exists.</small>
+                }
+                @if (editFieldErrors().frequency; as fieldError) {
+                  <small id="edit-frequency-error" class="report-edit-notice" role="alert">{{ fieldError }}</small>
+                }
+              </label>
+              <label class="report-field"><span>Report deadline after period end</span><input name="reportDeadlineOffsetDays" type="number" min="0" max="365" [(ngModel)]="draft.values.reportDeadlineOffsetDays" [disabled]="busy()" required><small>Calendar days</small></label>
+              <label class="report-field"><span>Report submission time</span><input name="dueTime" type="time" step="any" [(ngModel)]="draft.values.dueTime" [disabled]="busy()" required><small>Asia/Dhaka</small></label>
+              <label class="report-field"><span>Component deadline before report deadline</span><input name="componentDeadlineOffsetDays" type="number" min="0" max="365" [(ngModel)]="draft.values.componentDeadlineOffsetDays" [disabled]="busy()" required><small>Default calendar-day lead</small></label>
+              <app-submission-destination-picker class="report-description" [recipients]="submissionRecipients()" [destination]="draft.values"
+                [disabled]="busy()" (destinationChange)="updateEditDestination($event)" />
+              <details class="report-optional report-description" open>
+                <summary>Optional fields</summary>
+                <div class="form-grid">
+                  <label class="report-field"><span>Instruction reference</span><input name="instructionReference" [(ngModel)]="draft.values.instructionReference" [disabled]="busy()" maxlength="250"></label>
+                  <label class="report-description report-field"><span>Description</span><textarea name="description" [(ngModel)]="draft.values.description" [disabled]="busy()" maxlength="1000" rows="2"></textarea></label>
+                </div>
+              </details>
+              @if (editError()) { <div class="error-banner report-description" role="alert">{{ editError() }}</div> }
+              <div class="setup-actions">
+                <button class="secondary" type="button" [disabled]="busy()" (click)="closeReportEditor()">Cancel</button>
+                <button class="primary" type="submit" [disabled]="busy() || editForm.invalid || !canSaveReport()">{{ busy() ? 'Saving…' : 'Save changes' }}</button>
+              </div>
+            </form>
+          </article>
+        } @else {
           <section class="tracker-panel reports-grid" aria-label="Reports"><div class="panel-heading"><h3>Reports ({{ reports().length }})</h3></div>
             <div class="table-wrap"><table><thead><tr><th>Report</th><th>Type</th><th>Frequency</th><th>Coordinating division</th><th>Submission recipient</th><th>Cycles</th><th>Actions</th></tr></thead><tbody>
               @for (r of reports(); track r.id) {
@@ -104,6 +192,10 @@ const reportFrequencyByCode = new Map([
                   <td><strong>{{ r.name }}</strong><span>{{ r.code }}</span></td><td>{{ r.reportTypeName }}</td><td>{{ r.frequency }}</td><td>{{ divisionName(r.ownerDivisionId) }}</td>
                   <td><strong>{{ recipientName(r) }}</strong><span>{{ r.submissionDepartmentIds?.length ?? 0 }} {{ r.submissionDepartmentIds?.length===1 ? 'department' : 'departments' }}</span></td><td>{{ r.cycleCount }}</td>
                   <td><div class="report-row-actions">
+                    @if (r.canEdit) {
+                      <button #editAction class="link-button" type="button" (click)="editReport(r)" [attr.data-report-id]="r.id"
+                        [attr.aria-label]="'Edit report '+r.code" [disabled]="workspaceBusy()">Edit</button>
+                    }
                     <button class="link-button" type="button" (click)="openReportTab(r.id,'profile')" [attr.aria-label]="'Report profile for '+r.code" [disabled]="workspaceBusy()">Profile</button>
                     <button class="link-button" type="button" (click)="openReportTab(r.id,'components')" [attr.aria-label]="'Components for '+r.code" [disabled]="workspaceBusy()||!canOpen('components')">Components</button>
                     <button class="link-button" type="button" (click)="openReportTab(r.id,'cycles')" [attr.aria-label]="'Reporting cycles for '+r.code" [disabled]="workspaceBusy()||!canOpen('cycles')">Cycles</button>
@@ -112,6 +204,7 @@ const reportFrequencyByCode = new Map([
               } @empty { <tr><td colspan="7" class="empty">No reports configured yet.</td></tr> }
             </tbody></table></div>
           </section>
+        }
         </section>
         <section class="setup-tab-panel department-panel" role="tabpanel" id="setup-panel-create" aria-labelledby="setup-tab-create" [hidden]="activeTab()!=='create'">
             <article class="setup-card setup-editor report-inline-layout"><h3>Create report</h3>
@@ -232,6 +325,9 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
   readonly changed = output<void>();
   private readonly api = inject(DashboardService);
   private readonly session = inject(SessionService);
+  private readonly injector = inject(Injector);
+  private readonly editHeading = viewChild<ElementRef<HTMLElement>>('editHeading');
+  private readonly editActions = viewChildren<ElementRef<HTMLButtonElement>>('editAction');
   protected readonly lookups = signal<Lookups>({ divisions: [], officers: [], reportTypes: [] });
   protected readonly submissionRecipients = signal<SubmissionRecipient[]>([]);
   protected readonly reports = signal<ReportDefinition[]>([]);
@@ -242,6 +338,14 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
   protected readonly message = signal('');
   protected readonly frequencies = signal<{ value: string; name: string }[]>([]);
   protected report = this.emptyReport();
+  protected editDraft: { report: ReportDefinition; original: ReportConfigurationUpdate; values: ReportConfigurationUpdate } | null = null;
+  protected readonly editError = signal('');
+  protected readonly editFieldErrors = signal<Partial<Record<ReportEditField, string>>>({});
+  protected readonly editDivisionFields = [
+    { key: 'ownerDivisionId', label: 'Coordinating division', lock: 'coordinating', responsibility: 'Report Controller' },
+    { key: 'receivingDivisionId', label: 'Receiving division', lock: 'receiving', responsibility: 'Report Receiver' },
+    { key: 'submittingDivisionId', label: 'Final submitting division', lock: 'finalSubmitting', responsibility: 'Final Submission' }
+  ] as const;
   protected cycle = { reportId: '', reportingYear: this.currentYear(), periodKey: '', periodLabel: '', periodStart: '', periodEnd: '' };
   protected tasks = [this.newTask()];
   protected readonly savedCycles = signal<ReportingCycle[]>([]);
@@ -404,6 +508,7 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
   }
   protected chooseReport(id: string) {
     if (this.workspaceBusy() || id === this.selectedReportId()) return;
+    this.editDraft = null;
     this.selectedReportId.set(id);
     this.error.set('');
     if (this.activeTab() === 'cycles') this.selectReport(id);
@@ -416,6 +521,7 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
   protected canOpen(tab:SetupTab){return this.tabs.some(t=>t.id===tab);}
   protected selectTab(tab: SetupTab) {
     if (this.workspaceBusy() || !this.tabs.some(t=>t.id===tab)) return;
+    this.editDraft = null;
     if (tab !== this.activeTab()) this.error.set('');
     if (tab === 'components') this.componentsOpened.set(true);
     if (tab === 'cycles' && this.cycle.reportId !== this.selectedReportId()) this.selectReport(this.selectedReportId());
@@ -454,6 +560,95 @@ export class WorkspaceSetupComponent implements OnInit, OnDestroy {
     if (form.invalid || !this.hasFrequency(this.report.frequency) || !this.validDestination(this.report) || this.busy()) return;
     const dueTime = this.report.dueTime.length === 5 ? this.report.dueTime + ':00' : this.report.dueTime;
     this.save(this.api.createReport({...this.report,dueTime}), 'Report created.', saved => { this.report=this.emptyReport(); this.selectedReportId.set(saved.id); this.selectTab('reports'); });
+  }
+  protected editReport(report: ReportDefinition) {
+    if (!report.canEdit || this.workspaceBusy()) return;
+    this.chooseReport(report.id);
+    this.message.set('');
+    this.editError.set('');
+    this.editFieldErrors.set({});
+    const original: ReportConfigurationUpdate = {
+      name: report.name, reportTypeId: report.reportTypeId,
+      frequency: report.frequency, ownerDivisionId: report.ownerDivisionId,
+      receivingDivisionId: report.receivingDivisionId, submittingDivisionId: report.submittingDivisionId,
+      dueTime: (report.dueTime ?? '17:00').replace(/^(\d\d:\d\d):00$/, '$1'),
+      reportDeadlineOffsetDays: report.reportDeadlineOffsetDays ?? 0,
+      componentDeadlineOffsetDays: report.componentDeadlineOffsetDays ?? 1,
+      submissionRecipientId: report.submissionRecipientId ?? '',
+      submissionDepartmentIds: [...(report.submissionDepartmentIds ?? [])].sort(),
+      instructionReference: report.instructionReference ?? '', description: report.description ?? '',
+      rowVersion: report.rowVersion
+    };
+    this.editDraft = { report, original, values: { ...original } };
+    afterNextRender(() => this.editHeading()?.nativeElement.focus(), { injector: this.injector });
+  }
+  protected closeReportEditor() {
+    const reportId = this.editDraft?.report.id;
+    if (!reportId || this.busy()) return;
+    this.editDraft = null;
+    afterNextRender(() => {
+      this.editActions().find(action => action.nativeElement.dataset['reportId'] === reportId)?.nativeElement.focus();
+    }, { injector: this.injector });
+  }
+  protected clearEditFieldError(field: ReportEditField) {
+    if (this.editFieldErrors()[field]) {
+      this.editFieldErrors.update(errors => ({ ...errors, [field]: undefined }));
+    }
+  }
+  protected updateEditDestination(destination: SubmissionDestination) {
+    const draft = this.editDraft;
+    if (draft) {
+      draft.values = { ...draft.values, ...destination, submissionDepartmentIds: [...destination.submissionDepartmentIds].sort() };
+    }
+  }
+  protected canSaveReport() {
+    const draft = this.editDraft;
+    if (!draft) return false;
+    const { values, original } = draft;
+    const destinationChanged = values.submissionRecipientId !== original.submissionRecipientId ||
+      values.submissionDepartmentIds.join(',') !== original.submissionDepartmentIds.join(',');
+    return !!values.name.trim() &&
+      Number.isInteger(values.reportDeadlineOffsetDays) && Number.isInteger(values.componentDeadlineOffsetDays) &&
+      (!destinationChanged || this.validDestination(values)) && JSON.stringify(values) !== JSON.stringify(original);
+  }
+  protected updateReport(form: NgForm) {
+    const draft = this.editDraft;
+    if (!draft || form.invalid || this.workspaceBusy() || !this.canSaveReport()) return;
+    this.busy.set(true);
+    this.editError.set('');
+    this.editFieldErrors.set({});
+    this.api.updateReportConfiguration(draft.report.id, draft.values).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.closeReportEditor();
+        this.message.set('Report updated.');
+        this.changed.emit();
+        this.load(false);
+      },
+      error: (error: unknown) => {
+        this.busy.set(false);
+        const validation = error instanceof HttpErrorResponse ? error.error?.errors : undefined;
+        if (validation && typeof validation === 'object') {
+          const fields: ReportEditField[] = ['frequency', ...this.editDivisionFields.map(field => field.key)];
+          const inline: Partial<Record<ReportEditField, string>> = {};
+          for (const field of fields) {
+            const messages = validation[field];
+            if (Array.isArray(messages) && messages.every(message => typeof message === 'string')) {
+              inline[field] = messages.join(' ');
+            }
+          }
+          if (Object.keys(inline).length) {
+            this.editFieldErrors.set(inline);
+            this.editError.set(Object.entries(validation)
+              .filter(([field]) => !fields.includes(field as ReportEditField))
+              .flatMap(([, messages]) => Array.isArray(messages) ? messages : []).join(' '));
+            return;
+          }
+        }
+        this.editError.set(apiError(error));
+        if (error instanceof HttpErrorResponse && error.status === 409) this.officerAssignmentsSaved();
+      }
+    });
   }
   protected addCycle(form: NgForm) {
     if (form.invalid || this.busy() || this.cycleAssignmentsMissing() || this.manualCycleConflict()) return;

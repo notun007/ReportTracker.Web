@@ -6,6 +6,7 @@ import { ReportResponsibilityAssignments, ResponsibilitySection } from './dashbo
 
 type AssignmentKey = 'controller' | 'receiver' | 'finalSubmission';
 type Pair = { primaryAssigneeId: string; alternateAssigneeId: string };
+type AssignmentSection = { key: AssignmentKey; label: string; responsibility: string };
 
 @Component({
   selector: 'app-report-responsibilities',
@@ -24,10 +25,12 @@ export class ReportResponsibilityAssignmentsComponent {
   protected readonly busy = signal(false);
   protected readonly error = signal('');
   protected readonly message = signal('');
-  protected readonly sections: { key: AssignmentKey; label: string }[] = [
-    { key: 'controller', label: 'Coordinating division' },
-    { key: 'receiver', label: 'Receiving division' },
-    { key: 'finalSubmission', label: 'Final submitting division' },
+  protected readonly pendingUnassign = signal<AssignmentSection | null>(null);
+  protected readonly unassigning = signal(false);
+  protected readonly sections: AssignmentSection[] = [
+    { key: 'controller', label: 'Coordinating division', responsibility: 'Report Controller' },
+    { key: 'receiver', label: 'Receiving division', responsibility: 'Report Receiver' },
+    { key: 'finalSubmission', label: 'Final submitting division', responsibility: 'Final Submission' },
   ];
   protected form: Record<AssignmentKey, Pair> = {
     controller: { primaryAssigneeId: '', alternateAssigneeId: '' },
@@ -45,7 +48,7 @@ export class ReportResponsibilityAssignmentsComponent {
       onCleanup(() => subscription.unsubscribe());
     });
   }
-  private fetch(id: string) {
+  private fetch(id: string, clearedRole?: AssignmentKey) {
     const sequence = ++this.sequence;
     this.loading.set(true);
     this.error.set('');
@@ -56,11 +59,13 @@ export class ReportResponsibilityAssignmentsComponent {
       .subscribe({
         next: (data) => {
           if (sequence !== this.sequence) return;
-          for (const { key } of this.sections)
+          for (const { key } of this.sections) {
+            if (clearedRole && key !== clearedRole) continue;
             this.form[key] = {
               primaryAssigneeId: data[key].primaryAssigneeId ?? '',
               alternateAssigneeId: data[key].alternateAssigneeId ?? '',
             };
+          }
           this.directory.set(data);
           this.loading.set(false);
         },
@@ -157,6 +162,48 @@ export class ReportResponsibilityAssignmentsComponent {
       pair.alternateAssigneeId === (data[key].alternateAssigneeId ?? '')
       ? 'Assigned'
       : 'Ready';
+  }
+  protected canUnassign(data: ReportResponsibilityAssignments, key: AssignmentKey) {
+    const info = data[key];
+    return !!info.divisionId && !!(info.primaryAssigneeId || info.alternateAssigneeId) &&
+      (key !== 'receiver' || data.existingReceiverCount <= 2);
+  }
+  protected openUnassign(section: AssignmentSection, dialog: HTMLDialogElement) {
+    const data = this.directory();
+    if (this.busy() || !data || !this.canUnassign(data, section.key)) return;
+    this.pendingUnassign.set(section);
+    dialog.showModal();
+  }
+  protected unassign(dialog: HTMLDialogElement) {
+    const data = this.directory();
+    const section = this.pendingUnassign();
+    if (this.busy() || !data || !section || !this.canUnassign(data, section.key)) return;
+    dialog.close();
+    this.busy.set(true);
+    this.unassigning.set(true);
+    this.saving.emit(true);
+    this.error.set('');
+    this.dismissToast();
+    this.api.unassignReportResponsibility(data.reportId, section.key, data.rowVersion)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.finishUnassign();
+          this.message.set(`${section.responsibility} assignees unassigned.`);
+          this.resumeToast();
+          this.saved.emit();
+          this.fetch(data.reportId, section.key);
+        },
+        error: (error) => {
+          this.finishUnassign();
+          this.error.set(apiError(error));
+        },
+      });
+  }
+  private finishUnassign() {
+    this.busy.set(false);
+    this.unassigning.set(false);
+    this.saving.emit(false);
   }
   protected save(form: NgForm) {
     const data = this.directory();
